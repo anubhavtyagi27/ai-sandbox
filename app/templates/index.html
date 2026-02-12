@@ -206,8 +206,12 @@
             <div class="card-body">
                 {% if response_data._display_schema %}
                     <!-- Auto-detected schema display -->
+                    {# Set all possible variables from display schema #}
                     {% set content = response_data._display_schema.content %}
                     {% set schema_type = response_data._display_schema.schema_type %}
+                    {% set columns = response_data._display_schema.columns %}
+                    {% set rows = response_data._display_schema.rows %}
+                    {% set totals = response_data._display_schema.totals %}
                     {% include response_data._display_schema.template ignore missing %}
                 {% elif response_data.output %}
                     <!-- Fallback: Display raw output -->
