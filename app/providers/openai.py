@@ -76,6 +76,9 @@ class OpenAIProvider(BaseProvider):
         """
         return [
             ('gpt-4o', 'GPT-4o'),
+            ('gpt-5-pro', 'GPT-5 Pro'),
+            ('gpt-5', 'GPT-5'),
+            ('gpt-5-mini', 'GPT-5 Mini'),
             ('o1', 'o1'),
             ('o1-mini', 'o1-mini')
         ]
