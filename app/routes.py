@@ -1,7 +1,7 @@
 from flask import render_template, request, flash, current_app, session, Blueprint
-from app.forms import ResponsesAPIForm
+from app.forms import ResponsesAPIForm, ProviderSelectionForm
 from app.services.onepassword import OnePasswordService, OnePasswordError
-from app.providers import get_provider
+from app.providers import get_provider, list_providers
 from app.providers.openai import OpenAIError
 from app.schemas import detect_schema
 import json
@@ -20,10 +20,26 @@ def index():
     Main page with form and response display.
 
     Handles both GET (display form) and POST (submit form and call API) requests.
+    Supports provider selection and dynamic form generation.
     """
-    form = ResponsesAPIForm()
+    # Get selected provider from request or session
+    selected_provider = request.args.get('provider') or request.form.get('provider') or session.get('selected_provider') or current_app.config.get('DEFAULT_PROVIDER', 'openai')
+
+    # Save selected provider to session
+    session['selected_provider'] = selected_provider
+
+    # Create provider selection form
+    provider_form = ProviderSelectionForm()
+    if request.method == 'GET':
+        provider_form.provider.data = selected_provider
+
+    # Create API form with provider-specific fields
+    form = ResponsesAPIForm(provider_name=selected_provider)
     response_data = None
     error_message = None
+
+    # Get available providers for display
+    available_providers = list_providers()
 
     # Pre-populate system instruction file path from session
     if request.method == 'GET' and 'system_instruction_file' in session:
@@ -65,8 +81,8 @@ def index():
                         logger.error(f"Error reading saved system instruction file: {e}")
 
             # Step 2: Retrieve API key from 1Password
-            # Get the default provider from config
-            provider_name = current_app.config.get('DEFAULT_PROVIDER', 'openai')
+            # Use the selected provider
+            provider_name = selected_provider
             logger.info(f"Retrieving API key for provider: {provider_name}")
 
             # Get provider-specific 1Password reference
@@ -203,6 +219,9 @@ def index():
     return render_template(
         'index.html',
         form=form,
+        provider_form=provider_form,
+        selected_provider=selected_provider,
+        available_providers=available_providers,
         response_data=response_data,
         error=error_message
     )

@@ -1,23 +1,46 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField, IntegerField, DecimalField, BooleanField, SelectField
 from wtforms.validators import DataRequired, Optional, NumberRange, Length, ValidationError
+from app.providers import list_providers, get_provider_class
 import json
 
 
-class ResponsesAPIForm(FlaskForm):
-    """Form for OpenAI Responses API parameters"""
+class ProviderSelectionForm(FlaskForm):
+    """Form for selecting AI provider"""
 
-    # Latest OpenAI models
-    MODEL_CHOICES = [
-        ('gpt-4o', 'GPT-4o (5.2)'),
-        ('o1', 'o1 (5-mini)'),
-        ('o1-mini', 'o1-mini (5-nano)'),
-    ]
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Dynamically populate provider choices
+        providers = list_providers()
+        self.provider.choices = [(name, display_name) for name, display_name in providers.items()]
+
+    provider = SelectField(
+        'AI Provider',
+        validators=[DataRequired(message="Provider is required")],
+        render_kw={"class": "form-select"}
+    )
+
+
+class ResponsesAPIForm(FlaskForm):
+    """Form for AI API parameters - supports multiple providers"""
+
+    def __init__(self, provider_name='openai', *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.provider_name = provider_name
+
+        # Get provider class to fetch available models
+        provider_class = get_provider_class(provider_name)
+        if provider_class:
+            # Create temporary instance to get models
+            temp_provider = provider_class(api_key='dummy')
+            self.model.choices = temp_provider.models
+        else:
+            # Fallback to default choices
+            self.model.choices = [('gpt-4o', 'GPT-4o')]
 
     model = SelectField(
         'Model',
-        choices=MODEL_CHOICES,
-        default='gpt-4o',
+        choices=[],  # Will be populated dynamically in __init__
         validators=[DataRequired(message="Model is required")],
         render_kw={"class": "form-select"}
     )

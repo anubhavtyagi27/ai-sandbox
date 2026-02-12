@@ -6,6 +6,38 @@
         <h2 class="mb-4">AI Model API Tester</h2>
         <p class="lead text-muted">Test and experiment with different AI providers through a unified interface</p>
 
+        <!-- Provider Selection -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-cloud"></i> Select AI Provider
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="/" id="providerForm">
+                    <div class="row align-items-end">
+                        <div class="col-md-8">
+                            <label for="provider" class="form-label fw-bold">
+                                AI Provider
+                            </label>
+                            {{ provider_form.provider(class="form-select form-select-lg") }}
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-arrow-repeat"></i> Switch Provider
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i>
+                            Currently using: <strong>{{ available_providers.get(selected_provider, selected_provider) }}</strong>
+                        </small>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- API Form -->
         <div class="card mb-4">
             <div class="card-header">
@@ -14,6 +46,9 @@
             <div class="card-body">
                 <form method="POST" action="/" id="apiForm">
                     {{ form.hidden_tag() }}
+
+                    <!-- Hidden provider field to maintain selection on POST -->
+                    <input type="hidden" name="provider" value="{{ selected_provider }}">
 
                     <!-- Model Selection -->
                     <div class="mb-3">
