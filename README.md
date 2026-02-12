@@ -8,14 +8,26 @@ AI Sandbox is a Flask-based web application that provides a unified interface fo
 
 ## Features
 
-- 🤖 **Multi-Provider Support**: Currently supports OpenAI (Gemini & Anthropic coming soon)
+### Core Functionality
+- 🤖 **Multi-Provider Support**: Currently supports OpenAI (Gemini & Anthropic ready to add)
 - 🔐 **Secure API Key Management**: Retrieves API keys from 1Password CLI via biometric authentication (never stored locally)
-- 🎯 **Dynamic Form Generation**: Form fields adapt to selected AI provider's API parameters
+- 🎯 **Dynamic Provider Selection**: Switch between AI providers through intuitive UI dropdown
 - 📊 **Smart Response Display**: Auto-detects response format (structured data tables, plain text, JSON)
-- ⚡ **Performance Metrics**: Real-time latency and token usage tracking
+- ⚡ **Performance Metrics**: Real-time latency, token usage, and provider tracking
+
+### Architecture Highlights
+- 🏗️ **Provider Abstraction Layer**: Extensible architecture for adding new AI providers
+- 🔄 **Schema Detection System**: Automatically renders responses in optimal format
+- 📝 **Dynamic Form Generation**: Form fields adapt to selected provider's capabilities
+- 🎨 **Flexible Templates**: Modular partial templates for different response types
+- 💾 **Session Persistence**: Remembers provider selection and system instruction paths
+
+### User Experience
 - 🛡️ **Form Validation**: Client and server-side validation for all inputs
 - 📝 **System Instructions**: Load prompts from markdown files with session persistence
 - 📱 **Responsive Design**: Works seamlessly on desktop and mobile devices
+- 🎨 **Provider Context**: Clear indication of which provider generated each response
+- 🚨 **Generic Error Handling**: Provider-agnostic error messages and logging
 
 ## Supported Providers
 
@@ -178,23 +190,45 @@ AI Sandbox automatically detects the response format:
 ```
 ai-sandbox/
 ├── app/
-│   ├── __init__.py           # Flask app factory
-│   ├── routes.py             # Route handlers
-│   ├── forms.py              # Dynamic form generation
+│   ├── __init__.py              # Flask app factory with blueprint registration
+│   ├── routes.py                # Route handlers with provider selection
+│   ├── forms.py                 # Dynamic form generation (provider-aware)
+│   │
+│   ├── providers/               # 🔥 Provider abstraction layer
+│   │   ├── __init__.py          # Provider registry and factory
+│   │   ├── base.py              # BaseProvider abstract class
+│   │   ├── openai.py            # OpenAI implementation
+│   │   ├── gemini.py            # (Future) Google Gemini
+│   │   └── anthropic.py         # (Future) Anthropic Claude
+│   │
+│   ├── schemas/                 # 🔥 Response schema detection
+│   │   ├── __init__.py          # Schema registry and detection
+│   │   ├── base.py              # ResponseSchema abstract class
+│   │   ├── structured.py        # Structured data (tables)
+│   │   └── text.py              # Text and JSON responses
+│   │
 │   ├── services/
-│   │   ├── onepassword.py    # 1Password CLI integration
-│   │   └── openai_client.py  # OpenAI API client
+│   │   └── onepassword.py       # 1Password CLI integration
+│   │
 │   ├── templates/
-│   │   ├── base.html         # Base template
-│   │   └── index.html        # Main interface
+│   │   ├── base.html            # Base template with navigation
+│   │   ├── index.html           # Main interface with provider UI
+│   │   └── partials/            # 🔥 Modular response templates
+│   │       ├── _table.html      # Structured data table
+│   │       ├── _text.html       # Plain text display
+│   │       └── _json.html       # JSON syntax highlighting
+│   │
 │   └── static/css/
-│       └── style.css         # Custom styles
-├── config.py                 # Multi-provider configuration
-├── run.py                    # Application entry point
-├── requirements.txt          # Python dependencies
-├── .env.example             # Environment template
-└── README.md                # This file
+│       └── style.css            # Custom styles
+│
+├── config.py                    # Multi-provider configuration
+├── run.py                       # Application entry point
+├── requirements.txt             # Python dependencies
+├── .env.example                 # Environment template
+└── README.md                    # This file
 ```
+
+🔥 = New in v2.0 (multi-provider architecture)
 
 ## Security
 
@@ -230,48 +264,310 @@ pytest tests/
 
 **Error**: `1Password CLI not found`
 - Install from [1password.com/downloads/command-line](https://1password.com/downloads/command-line/)
+- Verify installation: `op --version`
 
 **Error**: `Not authenticated with 1Password`
 - Run: `op signin`
+- Follow biometric authentication prompts
 
 **Error**: `Item not found`
 - Verify item exists in 1Password
-- Check `OP_ITEM_REFERENCE_*` in `.env`
+- Check `OP_ITEM_REFERENCE_OPENAI` (or other provider) in `.env`
 - Ensure format: `op://vault/item/field`
+- Test manually: `op read "op://vault/item/field"`
 
-### API Errors
+**Error**: `No 1Password reference configured for provider`
+- Add missing `OP_ITEM_REFERENCE_[PROVIDER]` to `.env`
+- Example: `OP_ITEM_REFERENCE_OPENAI=op://Projects/OpenAI Key/credential`
+
+### Provider Issues
+
+**Error**: `Provider 'xyz' is not supported`
+- Check provider name spelling in dropdown
+- Verify provider is registered in `app/providers/__init__.py`
+- Ensure provider class is imported correctly
+
+**Error**: `[Provider] API Error: ...`
+- Check API key is correct in 1Password
+- Verify provider API endpoint is accessible
+- Check provider's service status page
+- Review error message for specific issue
 
 **Invalid API Key** (401):
 - Verify key in 1Password
 - Test: `op read "your-reference-path"`
+- Ensure key has correct permissions for API
 
 **Rate Limit** (429):
 - Wait before retrying
-- Check provider usage limits
+- Check provider's rate limits documentation
+- Consider upgrading API tier
+
+### Application Issues
 
 **Port in Use**:
 - Change port in `run.py` (default: 5001)
+- Or kill existing process: `lsof -ti:5001 | xargs kill`
+
+**Provider dropdown not showing**:
+- Check `list_providers()` returns providers
+- Verify PROVIDERS dict in `app/providers/__init__.py`
+- Clear browser cache and reload
+
+**Form not updating after provider switch**:
+- Ensure JavaScript is enabled
+- Check browser console for errors
+- Verify provider form submission works
+
+**Schema detection not working**:
+- Check data format returned by provider
+- Verify `parse_response()` returns correct structure
+- Add logging to `detect_schema()` for debugging
 
 ## Architecture
 
-AI Sandbox uses a provider abstraction layer for multi-provider support:
+AI Sandbox uses a three-layer architecture for extensibility and maintainability:
 
-- **Base Provider Interface**: Abstract class defining common methods
-- **Provider Implementations**: Specific clients for OpenAI, Gemini, etc.
-- **Schema Detection**: Auto-detects response format for optimal display
-- **Dynamic Forms**: Generates form fields based on provider capabilities
+### 1. Provider Abstraction Layer (`app/providers/`)
+
+All AI providers implement the `BaseProvider` abstract class:
+
+```python
+class BaseProvider(ABC):
+    @property
+    def name(self) -> str: ...           # Display name
+
+    @property
+    def models(self) -> List[Tuple]: ... # Available models
+
+    def create_response(params): ...      # API call
+    def parse_response(response): ...     # Response parsing
+    def validate_parameters(params): ...  # Parameter validation
+```
+
+**Current Implementations:**
+- `OpenAIProvider` - OpenAI Responses API (GPT-4o, o1, o1-mini)
+- Ready to add: `GeminiProvider`, `AnthropicProvider`
+
+### 2. Schema Detection System (`app/schemas/`)
+
+Automatically detects response format and renders appropriately:
+
+- **StructuredDataSchema**: Tables with automatic totals for numeric columns
+- **TextSchema**: Plain text responses with formatting preservation
+- **JSONSchema**: Syntax-highlighted JSON for complex data
+
+Detection happens automatically based on response content structure.
+
+### 3. Dynamic Form Generation (`app/forms.py`)
+
+Forms adapt to selected provider:
+- Model dropdown populated from provider metadata
+- Provider-specific parameters automatically included
+- Form validation based on provider requirements
+
+### Key Design Patterns
+
+- **Factory Pattern**: Provider registry for dynamic instantiation
+- **Template Method**: BaseProvider defines interface, subclasses implement
+- **Strategy Pattern**: Schema detection chooses rendering strategy
+- **Session Pattern**: Provider selection persists across requests
+
+## Adding a New Provider
+
+Want to add support for Google Gemini, Anthropic Claude, or another AI provider? Follow these steps:
+
+### Step 1: Create Provider Implementation
+
+Create `app/providers/your_provider.py`:
+
+```python
+from typing import Dict, List, Any, Tuple, Optional
+from .base import BaseProvider
+
+class YourProvider(BaseProvider):
+    def __init__(self, api_key: str, **kwargs):
+        super().__init__(api_key)
+        # Provider-specific initialization
+
+    @property
+    def name(self) -> str:
+        return "Your Provider Name"
+
+    @property
+    def models(self) -> List[Tuple[str, str]]:
+        return [
+            ('model-id-1', 'Model Display Name 1'),
+            ('model-id-2', 'Model Display Name 2'),
+        ]
+
+    def create_response(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        # Make API call to your provider
+        # Return raw response
+        pass
+
+    def parse_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
+        # Parse provider's response format
+        return {
+            'content': extracted_content,
+            'metadata': {...}
+        }
+
+    def validate_parameters(self, params: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        # Validate params before API call
+        if 'model' not in params:
+            return False, "Model is required"
+        return True, None
+```
+
+### Step 2: Register Provider
+
+Add to `app/providers/__init__.py`:
+
+```python
+from .your_provider import YourProvider
+
+PROVIDERS: Dict[str, Type[BaseProvider]] = {
+    'openai': OpenAIProvider,
+    'your_provider': YourProvider,  # Add here
+}
+```
+
+### Step 3: Configure API Key
+
+Add to `.env`:
+
+```bash
+OP_ITEM_REFERENCE_YOUR_PROVIDER=op://vault/Your Provider Key/credential
+```
+
+### Step 4: Test
+
+Start the app and select your provider from the dropdown. The UI automatically updates with your provider's models and parameters!
+
+### Optional: Custom Error Handling
+
+Define provider-specific exceptions:
+
+```python
+class YourProviderError(Exception):
+    pass
+
+class YourProviderAuthError(YourProviderError):
+    pass
+```
+
+The generic error handler in `routes.py` will catch these automatically.
+
+## Schema Detection System
+
+AI Sandbox automatically detects the format of AI responses and renders them optimally.
+
+### How It Works
+
+1. **Response Parsing**: Provider returns data from API
+2. **Schema Detection**: `detect_schema()` analyzes the data structure
+3. **Template Selection**: Appropriate partial template is chosen
+4. **Rendering**: Data is displayed with the optimal format
+
+### Available Schemas
+
+#### StructuredDataSchema
+- **Detects**: Lists of dictionaries with consistent keys
+- **Renders**: Formatted tables with sortable columns
+- **Features**:
+  - Automatic totals for numeric columns (calories, price, etc.)
+  - Smart column ordering (name fields first)
+  - Responsive table design
+
+**Example Use Cases:**
+- Nutrition tables
+- Product comparisons
+- Data analysis results
+- Any tabular data
+
+#### TextSchema
+- **Detects**: Plain text strings or simple dictionaries
+- **Renders**: Clean text with whitespace preservation
+- **Features**:
+  - Proper formatting for paragraphs
+  - Word wrapping
+  - Readable fonts
+
+**Example Use Cases:**
+- Essay responses
+- Code explanations
+- General AI conversations
+
+#### JSONSchema
+- **Detects**: Explicitly requested only
+- **Renders**: Syntax-highlighted JSON
+- **Features**:
+  - Pretty-printed with indentation
+  - Scrollable for large responses
+  - Raw data visibility
+
+### Adding Custom Schemas
+
+Create `app/schemas/your_schema.py`:
+
+```python
+from .base import ResponseSchema
+
+class YourSchema(ResponseSchema):
+    def detect(self, data: Any) -> bool:
+        # Return True if this schema can handle the data
+        return isinstance(data, YourCustomType)
+
+    def render_context(self, data: Any) -> Dict[str, Any]:
+        # Transform data for template
+        return {'your_data': processed_data}
+
+    @property
+    def template_name(self) -> str:
+        return 'partials/_your_template.html'
+
+    @property
+    def priority(self) -> int:
+        return 20  # Lower = checked first
+```
+
+Register in `app/schemas/__init__.py`:
+
+```python
+SCHEMAS: List[ResponseSchema] = [
+    YourSchema(),           # Add here
+    StructuredDataSchema(),
+    TextSchema(),
+]
+```
 
 ## Roadmap
 
+### Completed ✅
 - [x] OpenAI Responses API integration
 - [x] Secure 1Password CLI integration
-- [x] Dynamic response table display
-- [x] Performance metrics tracking
-- [ ] Provider abstraction layer
-- [ ] Google Gemini support
-- [ ] Anthropic Claude support
+- [x] Dynamic response display with schema detection
+- [x] Performance metrics tracking with provider context
+- [x] Provider abstraction layer
+- [x] Multi-provider UI with provider selection
+- [x] Dynamic form generation based on provider
+- [x] Schema detection system (structured, text, JSON)
+- [x] Generic error handling for all providers
+- [x] Session-based provider persistence
+
+### In Progress 🚧
+- [ ] Google Gemini provider implementation
+- [ ] Anthropic Claude provider implementation
+
+### Planned 📋
 - [ ] Response history and export
-- [ ] Streaming support
+- [ ] Streaming support for real-time responses
+- [ ] Provider comparison mode (side-by-side)
+- [ ] Cost tracking and estimation
+- [ ] Custom schema definitions
+- [ ] Batch request processing
+- [ ] API response caching
 
 ## Contributing
 
