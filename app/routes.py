@@ -3,6 +3,7 @@ from app.forms import ResponsesAPIForm, ProviderSelectionForm
 from app.services.onepassword import OnePasswordService, OnePasswordError
 from app.providers import get_provider, list_providers
 from app.schemas import detect_schema
+from config import Config
 import json
 import logging
 import os
@@ -85,7 +86,7 @@ def index():
             logger.info(f"Retrieving API key for provider: {provider_name}")
 
             # Get provider-specific 1Password reference
-            op_reference = current_app.config.get_provider_reference(provider_name)
+            op_reference = Config.get_provider_reference(provider_name)
             api_key = OnePasswordService.get_secret(op_reference)
 
             # Step 3: Prepare API parameters

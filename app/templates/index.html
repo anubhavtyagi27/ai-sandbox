@@ -206,13 +206,9 @@
             <div class="card-body">
                 {% if response_data._display_schema %}
                     <!-- Auto-detected schema display -->
-                    {% with schema = response_data._display_schema %}
-                        {% if schema.template %}
-                            {% include schema.template ignore missing %}
-                        {% else %}
-                            <p class="text-muted">No display template available</p>
-                        {% endif %}
-                    {% endwith %}
+                    {% set content = response_data._display_schema.content %}
+                    {% set schema_type = response_data._display_schema.schema_type %}
+                    {% include response_data._display_schema.template ignore missing %}
                 {% elif response_data.output %}
                     <!-- Fallback: Display raw output -->
                     <p class="text-muted">Response received but could not be parsed.</p>
