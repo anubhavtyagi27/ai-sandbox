@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <h2 class="mb-4">Test OpenAI Responses API</h2>
+
+        <!-- API Form -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">API Parameters</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="/" id="apiForm">
+                    {{ form.hidden_tag() }}
+
+                    <!-- Model Selection -->
+                    <div class="mb-3">
+                        <label for="model" class="form-label">
+                            {{ form.model.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.model }}
+                        {% if form.model.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.model.errors[0] }}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- System Instruction File Path -->
+                    <div class="mb-3">
+                        <label for="system_instruction_file" class="form-label">
+                            {{ form.system_instruction_file.label }}
+                        </label>
+                        {{ form.system_instruction_file }}
+                        {% if form.system_instruction_file.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.system_instruction_file.errors[0] }}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">
+                            Path to markdown file with system instructions. Once set, it will be remembered for future requests.
+                        </div>
+                    </div>
+
+                    <!-- Input Text -->
+                    <div class="mb-3">
+                        <label for="input" class="form-label">
+                            {{ form.input.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.input }}
+                        {% if form.input.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.input.errors[0] }}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">Enter your prompt or message for the model.</div>
+                    </div>
+
+                    <!-- Optional Parameters - Collapsible -->
+                    <div class="accordion mb-3" id="optionalParams">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOptional">
+                                    Optional Parameters
+                                </button>
+                            </h2>
+                            <div id="collapseOptional" class="accordion-collapse collapse">
+                                <div class="accordion-body">
+                                    <div class="row">
+                                        <!-- Max Tokens -->
+                                        <div class="col-md-4 mb-3">
+                                            <label for="max_tokens" class="form-label">{{ form.max_tokens.label }}</label>
+                                            {{ form.max_tokens }}
+                                            {% if form.max_tokens.errors %}
+                                                <div class="invalid-feedback d-block">
+                                                    {{ form.max_tokens.errors[0] }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+
+                                        <!-- Temperature -->
+                                        <div class="col-md-4 mb-3">
+                                            <label for="temperature" class="form-label">{{ form.temperature.label }}</label>
+                                            {{ form.temperature }}
+                                            {% if form.temperature.errors %}
+                                                <div class="invalid-feedback d-block">
+                                                    {{ form.temperature.errors[0] }}
+                                                </div>
+                                            {% endif %}
+                                            <div class="form-text small">Higher = more random</div>
+                                        </div>
+
+                                        <!-- Top P -->
+                                        <div class="col-md-4 mb-3">
+                                            <label for="top_p" class="form-label">{{ form.top_p.label }}</label>
+                                            {{ form.top_p }}
+                                            {% if form.top_p.errors %}
+                                                <div class="invalid-feedback d-block">
+                                                    {{ form.top_p.errors[0] }}
+                                                </div>
+                                            {% endif %}
+                                            <div class="form-text small">Nucleus sampling</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Metadata -->
+                                    <div class="mb-3">
+                                        <label for="metadata" class="form-label">{{ form.metadata.label }}</label>
+                                        {{ form.metadata }}
+                                        {% if form.metadata.errors %}
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.metadata.errors[0] }}
+                                            </div>
+                                        {% endif %}
+                                        <div class="form-text">Optional metadata as JSON object</div>
+                                    </div>
+
+                                    <!-- Boolean Options -->
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <div class="form-check">
+                                                {{ form.stream }}
+                                                <label class="form-check-label" for="stream">
+                                                    {{ form.stream.label }}
+                                                </label>
+                                                <div class="form-text small">Stream response as it's generated</div>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <div class="form-check">
+                                                {{ form.store }}
+                                                <label class="form-check-label" for="store">
+                                                    {{ form.store.label }}
+                                                </label>
+                                                <div class="form-text small">Store response for later retrieval</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
+                            <span class="submit-text">Submit Request</span>
+                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Response Display -->
+        {% if response_data %}
+
+        <!-- Response Content -->
+        <div class="card mb-3">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">Response Content</h5>
+            </div>
+            <div class="card-body">
+                {% if response_data._parsed_data %}
+                    <!-- Structured Data Table -->
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover table-bordered">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th style="width: 20%;">Food Name</th>
+                                    <th style="width: 15%;">Portion</th>
+                                    <th style="width: 10%;">Calories</th>
+                                    <th style="width: 10%;">Protein (g)</th>
+                                    <th style="width: 10%;">Carbs (g)</th>
+                                    <th style="width: 10%;">Fat (g)</th>
+                                    <th style="width: 25%;">Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in response_data._parsed_data %}
+                                <tr>
+                                    <td class="fw-bold">{{ item.food_name or item.get('name', 'N/A') }}</td>
+                                    <td>{{ item.portion or item.get('serving', 'N/A') }}</td>
+                                    <td class="text-center">{{ item.calories or 0 }}</td>
+                                    <td class="text-center">{{ item.protein or 0 }}</td>
+                                    <td class="text-center">{{ item.carbs or 0 }}</td>
+                                    <td class="text-center">{{ item.fat or 0 }}</td>
+                                    <td class="text-muted small">{{ item.notes or '' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr class="fw-bold">
+                                    <td colspan="2">TOTAL</td>
+                                    <td class="text-center">{{ response_data._parsed_data | sum(attribute='calories') | round(1) }}</td>
+                                    <td class="text-center">{{ response_data._parsed_data | sum(attribute='protein') | round(1) }}</td>
+                                    <td class="text-center">{{ response_data._parsed_data | sum(attribute='carbs') | round(1) }}</td>
+                                    <td class="text-center">{{ response_data._parsed_data | sum(attribute='fat') | round(1) }}</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                {% elif response_data._text_content %}
+                    <!-- Plain Text Content -->
+                    <div class="content-display">
+                        <pre class="content-text">{{ response_data._text_content }}</pre>
+                    </div>
+                {% elif response_data.output %}
+                    <!-- Fallback: Display raw output -->
+                    <p class="text-muted">Response received but could not be parsed into table format.</p>
+                    <pre class="content-text">{{ response_data.output | tojson(indent=2) }}</pre>
+                {% else %}
+                    <p class="text-muted">No output content available</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Metrics Section -->
+        {% if response_data._metrics %}
+        <div class="card mb-3">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Performance Metrics</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Response Time</h6>
+                        <div class="metric-item">
+                            <span class="metric-label">Latency:</span>
+                            <span class="metric-value">{{ response_data._metrics.latency_ms }} ms ({{ response_data._metrics.latency_seconds }}s)</span>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-muted mb-3">Token Usage</h6>
+                        {% if response_data._metrics.total_tokens %}
+                        <div class="metric-item">
+                            <span class="metric-label">Prompt Tokens:</span>
+                            <span class="metric-value">{{ response_data._metrics.prompt_tokens or 'N/A' }}</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Completion Tokens:</span>
+                            <span class="metric-value">{{ response_data._metrics.completion_tokens or 'N/A' }}</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Total Tokens:</span>
+                            <span class="metric-value font-weight-bold">{{ response_data._metrics.total_tokens }}</span>
+                        </div>
+                        {% else %}
+                        <p class="text-muted mb-0">Token usage not available</p>
+                        {% endif %}
+                    </div>
+                </div>
+                <hr>
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <h6 class="text-muted mb-3">Request Details</h6>
+                        <div class="metric-item">
+                            <span class="metric-label">Model:</span>
+                            <span class="metric-value">{{ response_data._metrics.model }}</span>
+                        </div>
+                        {% if response_data._metrics.created_at %}
+                        <div class="metric-item">
+                            <span class="metric-label">Created At:</span>
+                            <span class="metric-value">{{ response_data._metrics.created_at }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Full JSON Response (Collapsible) -->
+        <div class="card">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="mb-0">
+                    <button class="btn btn-link text-white text-decoration-none p-0" type="button" data-bs-toggle="collapse" data-bs-target="#fullResponse">
+                        Full JSON Response (Click to expand)
+                    </button>
+                </h5>
+            </div>
+            <div id="fullResponse" class="collapse">
+                <div class="card-body">
+                    <pre class="response-json"><code>{{ response_data | tojson(indent=2) }}</code></pre>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if error %}
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">Error</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-0">{{ error }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Add loading state to submit button
+    document.getElementById('apiForm').addEventListener('submit', function(e) {
+        const btn = document.getElementById('submitBtn');
+        const text = btn.querySelector('.submit-text');
+        const spinner = btn.querySelector('.spinner-border');
+
+        text.textContent = 'Processing...';
+        spinner.classList.remove('d-none');
+        btn.disabled = true;
+    });
+</script>
+{% endblock %}
