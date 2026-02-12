@@ -32,8 +32,8 @@ def create_app():
     # Log startup info
     app.logger.info(f"Starting Flask app in {app.config['FLASK_ENV']} mode")
 
-    # Register routes
-    with app.app_context():
-        from app import routes
+    # Register blueprints
+    from app.routes import bp as main_bp
+    app.register_blueprint(main_bp)
 
     return app

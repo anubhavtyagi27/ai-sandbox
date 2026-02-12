@@ -1,19 +1,19 @@
-from flask import render_template, request, flash, current_app, session
-from app import create_app
+from flask import render_template, request, flash, current_app, session, Blueprint
 from app.forms import ResponsesAPIForm
 from app.services.onepassword import OnePasswordService, OnePasswordError
-from app.services.openai_client import OpenAIClient, OpenAIError
+from app.providers import get_provider
+from app.providers.openai import OpenAIError
 import json
 import logging
 import os
 import time
 
-# Get Flask app instance
-app = create_app()
+# Create blueprint for routes
+bp = Blueprint('main', __name__)
 logger = logging.getLogger(__name__)
 
 
-@app.route('/', methods=['GET', 'POST'])
+@bp.route('/', methods=['GET', 'POST'])
 def index():
     """
     Main page with form and response display.
@@ -64,8 +64,12 @@ def index():
                         logger.error(f"Error reading saved system instruction file: {e}")
 
             # Step 2: Retrieve API key from 1Password
-            logger.info("Retrieving API key from 1Password")
-            op_reference = current_app.config['OP_ITEM_REFERENCE']
+            # Get the default provider from config
+            provider_name = current_app.config.get('DEFAULT_PROVIDER', 'openai')
+            logger.info(f"Retrieving API key for provider: {provider_name}")
+
+            # Get provider-specific 1Password reference
+            op_reference = current_app.config.get_provider_reference(provider_name)
             api_key = OnePasswordService.get_secret(op_reference)
 
             # Step 3: Prepare API parameters
@@ -98,13 +102,16 @@ def index():
             if form.metadata.data and form.metadata.data.strip():
                 params['metadata'] = json.loads(form.metadata.data)
 
-            # Step 4: Call OpenAI API
-            logger.info(f"Calling OpenAI Responses API with model: {params['model']}")
-            client = OpenAIClient(api_key, timeout=None)  # No timeout - unlimited
+            # Step 4: Call Provider API
+            logger.info(f"Calling {provider_name} API with model: {params['model']}")
+            provider = get_provider(provider_name, api_key, timeout=None)  # No timeout - unlimited
+
+            if not provider:
+                raise ValueError(f"Provider '{provider_name}' is not supported")
 
             # Measure response time
             start_time = time.time()
-            response_data = client.create_response(params)
+            response_data = provider.create_response(params)
             end_time = time.time()
 
             # Calculate latency
@@ -158,7 +165,7 @@ def index():
                     logger.warning(f"Error parsing response content: {e}")
 
             flash('Response received successfully!', 'success')
-            logger.info(f"Successfully received response from OpenAI (latency: {latency_seconds:.2f}s)")
+            logger.info(f"Successfully received response from {provider_name} (latency: {latency_seconds:.2f}s)")
 
         except OnePasswordError as e:
             error_message = f"1Password Error: {str(e)}"

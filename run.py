@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-Application entry point for the OpenAI Responses API Flask application.
+Application entry point for AI Sandbox Flask application.
 
 This script initializes and runs the Flask development server.
 For production deployment, use a WSGI server like Gunicorn instead.
 """
-from app.routes import app
+from app import create_app
+
+# Create the Flask application
+app = create_app()
 
 if __name__ == '__main__':
     # Run the Flask development server
