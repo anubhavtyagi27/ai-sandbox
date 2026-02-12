@@ -3,6 +3,7 @@ from app.forms import ResponsesAPIForm
 from app.services.onepassword import OnePasswordService, OnePasswordError
 from app.providers import get_provider
 from app.providers.openai import OpenAIError
+from app.schemas import detect_schema
 import json
 import logging
 import os
@@ -138,8 +139,10 @@ def index():
             # Add metrics to response data for template
             response_data['_metrics'] = metrics
 
-            # Parse structured data from output for table display
+            # Parse response content and detect appropriate display schema
             parsed_content = None
+            display_schema = None
+
             if response_data.get('output'):
                 try:
                     # Extract text from output
@@ -150,19 +153,29 @@ def index():
                                 if content_item.get('text'):
                                     text_content.append(content_item['text'])
 
-                    # Try to parse as JSON
+                    # Try to parse as JSON first
                     if text_content:
                         combined_text = ''.join(text_content)
                         try:
                             parsed_json = json.loads(combined_text)
-                            if isinstance(parsed_json, list):
-                                response_data['_parsed_data'] = parsed_json
-                                logger.info(f"Parsed {len(parsed_json)} items from response")
+                            parsed_content = parsed_json
+                            logger.info(f"Parsed JSON content from response")
                         except json.JSONDecodeError:
-                            # Not JSON, keep as text
-                            response_data['_text_content'] = combined_text
+                            # Not JSON, use plain text
+                            parsed_content = combined_text
+                            logger.info("Response is plain text")
+
                 except Exception as e:
                     logger.warning(f"Error parsing response content: {e}")
+                    parsed_content = str(response_data.get('output', ''))
+
+            # Auto-detect the appropriate schema for display
+            if parsed_content is not None:
+                schema = detect_schema(parsed_content)
+                display_schema = schema.render_context(parsed_content)
+                display_schema['template'] = schema.template_name
+                response_data['_display_schema'] = display_schema
+                logger.info(f"Using schema: {type(schema).__name__}")
 
             flash('Response received successfully!', 'success')
             logger.info(f"Successfully received response from {provider_name} (latency: {latency_seconds:.2f}s)")

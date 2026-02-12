@@ -164,54 +164,18 @@
                 <h5 class="mb-0">Response Content</h5>
             </div>
             <div class="card-body">
-                {% if response_data._parsed_data %}
-                    <!-- Structured Data Table -->
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover table-bordered">
-                            <thead class="table-dark">
-                                <tr>
-                                    <th style="width: 20%;">Food Name</th>
-                                    <th style="width: 15%;">Portion</th>
-                                    <th style="width: 10%;">Calories</th>
-                                    <th style="width: 10%;">Protein (g)</th>
-                                    <th style="width: 10%;">Carbs (g)</th>
-                                    <th style="width: 10%;">Fat (g)</th>
-                                    <th style="width: 25%;">Notes</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in response_data._parsed_data %}
-                                <tr>
-                                    <td class="fw-bold">{{ item.food_name or item.get('name', 'N/A') }}</td>
-                                    <td>{{ item.portion or item.get('serving', 'N/A') }}</td>
-                                    <td class="text-center">{{ item.calories or 0 }}</td>
-                                    <td class="text-center">{{ item.protein or 0 }}</td>
-                                    <td class="text-center">{{ item.carbs or 0 }}</td>
-                                    <td class="text-center">{{ item.fat or 0 }}</td>
-                                    <td class="text-muted small">{{ item.notes or '' }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                            <tfoot class="table-light">
-                                <tr class="fw-bold">
-                                    <td colspan="2">TOTAL</td>
-                                    <td class="text-center">{{ response_data._parsed_data | sum(attribute='calories') | round(1) }}</td>
-                                    <td class="text-center">{{ response_data._parsed_data | sum(attribute='protein') | round(1) }}</td>
-                                    <td class="text-center">{{ response_data._parsed_data | sum(attribute='carbs') | round(1) }}</td>
-                                    <td class="text-center">{{ response_data._parsed_data | sum(attribute='fat') | round(1) }}</td>
-                                    <td></td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                {% elif response_data._text_content %}
-                    <!-- Plain Text Content -->
-                    <div class="content-display">
-                        <pre class="content-text">{{ response_data._text_content }}</pre>
-                    </div>
+                {% if response_data._display_schema %}
+                    <!-- Auto-detected schema display -->
+                    {% with schema = response_data._display_schema %}
+                        {% if schema.template %}
+                            {% include schema.template ignore missing %}
+                        {% else %}
+                            <p class="text-muted">No display template available</p>
+                        {% endif %}
+                    {% endwith %}
                 {% elif response_data.output %}
                     <!-- Fallback: Display raw output -->
-                    <p class="text-muted">Response received but could not be parsed into table format.</p>
+                    <p class="text-muted">Response received but could not be parsed.</p>
                     <pre class="content-text">{{ response_data.output | tojson(indent=2) }}</pre>
                 {% else %}
                     <p class="text-muted">No output content available</p>
