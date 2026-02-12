@@ -2,7 +2,6 @@ from flask import render_template, request, flash, current_app, session, Bluepri
 from app.forms import ResponsesAPIForm, ProviderSelectionForm
 from app.services.onepassword import OnePasswordService, OnePasswordError
 from app.providers import get_provider, list_providers
-from app.providers.openai import OpenAIError
 from app.schemas import detect_schema
 import json
 import logging
@@ -155,6 +154,12 @@ def index():
             # Add metrics to response data for template
             response_data['_metrics'] = metrics
 
+            # Add provider information for display
+            response_data['_provider'] = {
+                'name': provider_name,
+                'display_name': available_providers.get(provider_name, provider_name.title())
+            }
+
             # Parse response content and detect appropriate display schema
             parsed_content = None
             display_schema = None
@@ -201,19 +206,22 @@ def index():
             logger.error(f"1Password error: {e}")
             flash(error_message, 'danger')
 
-        except OpenAIError as e:
-            error_message = f"OpenAI API Error: {str(e)}"
-            logger.error(f"OpenAI error: {e}")
-            flash(error_message, 'danger')
-
         except json.JSONDecodeError as e:
             error_message = f"Invalid metadata JSON: {str(e)}"
             logger.error(f"JSON decode error: {e}")
             flash(error_message, 'danger')
 
+        except ValueError as e:
+            # Catches provider validation errors and configuration errors
+            error_message = str(e)
+            logger.error(f"Validation error: {e}")
+            flash(error_message, 'danger')
+
         except Exception as e:
-            error_message = "An unexpected error occurred. Please try again."
-            logger.exception(f"Unexpected error: {e}")
+            # Generic error handler for provider API errors and unexpected issues
+            error_type = type(e).__name__
+            error_message = f"{provider_name.title()} API Error: {str(e)}"
+            logger.exception(f"{error_type} from {provider_name}: {e}")
             flash(error_message, 'danger')
 
     return render_template(

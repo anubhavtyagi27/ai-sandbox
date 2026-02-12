@@ -196,7 +196,12 @@
         <!-- Response Content -->
         <div class="card mb-3">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0">Response Content</h5>
+                <h5 class="mb-0">
+                    <i class="bi bi-check-circle"></i> Response Content
+                    {% if response_data._provider %}
+                    <small class="float-end">from {{ response_data._provider.display_name }}</small>
+                    {% endif %}
+                </h5>
             </div>
             <div class="card-body">
                 {% if response_data._display_schema %}
@@ -257,6 +262,14 @@
                 <div class="row mt-3">
                     <div class="col-md-12">
                         <h6 class="text-muted mb-3">Request Details</h6>
+                        {% if response_data._provider %}
+                        <div class="metric-item">
+                            <span class="metric-label">Provider:</span>
+                            <span class="metric-value">
+                                <span class="badge bg-primary">{{ response_data._provider.display_name }}</span>
+                            </span>
+                        </div>
+                        {% endif %}
                         <div class="metric-item">
                             <span class="metric-label">Model:</span>
                             <span class="metric-value">{{ response_data._metrics.model }}</span>
