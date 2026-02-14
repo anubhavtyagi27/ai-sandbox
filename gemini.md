@@ -67,3 +67,13 @@ python run.py
 ```
 
 The application will be available at `http://127.0.0.1:5001`.
+
+## Running the Application (Easy Way)
+
+A `start.sh` script is provided to simplify the process of running the application. This script will automatically create a virtual environment, install dependencies, and start the application.
+
+To run the application using the script, execute the following command in your terminal:
+
+```bash
+./start.sh
+```
