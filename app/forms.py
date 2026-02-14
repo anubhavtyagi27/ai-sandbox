@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, IntegerField, DecimalField, BooleanField, SelectField
+from wtforms import StringField, TextAreaField, IntegerField, DecimalField, BooleanField, SelectField, RadioField
 from wtforms.validators import DataRequired, Optional, NumberRange, Length, ValidationError
 from app.providers import list_providers, get_provider_class
 import json
@@ -54,11 +54,27 @@ class ResponsesAPIForm(FlaskForm):
         }
     )
 
+    input_mode = RadioField(
+        'Input Mode',
+        choices=[('text', 'Text'), ('image', 'Image')],
+        default='text',
+        render_kw={"class": "btn-group-toggle"}
+    )
+
+    image_path = StringField(
+        'Image Path',
+        validators=[Optional()],
+        render_kw={
+            "placeholder": "/absolute/path/to/image.jpg",
+            "class": "form-control"
+        }
+    )
+
     input = TextAreaField(
         'Input',
         validators=[
-            DataRequired(message="Input is required"),
-            Length(min=1, message="Input cannot be empty")
+            Optional(),
+            # DataRequired is handled conditionally in validation
         ],
         render_kw={
             "rows": 8,

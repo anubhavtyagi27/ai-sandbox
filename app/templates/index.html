@@ -31,7 +31,8 @@
                     <div class="mt-3">
                         <small class="text-muted">
                             <i class="bi bi-info-circle"></i>
-                            Currently using: <strong>{{ available_providers.get(selected_provider, selected_provider) }}</strong>
+                            Currently using: <strong>{{ available_providers.get(selected_provider, selected_provider)
+                                }}</strong>
                         </small>
                     </div>
                 </form>
@@ -57,9 +58,9 @@
                         </label>
                         {{ form.model }}
                         {% if form.model.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.model.errors[0] }}
-                            </div>
+                        <div class="invalid-feedback d-block">
+                            {{ form.model.errors[0] }}
+                        </div>
                         {% endif %}
                     </div>
 
@@ -70,25 +71,51 @@
                         </label>
                         {{ form.system_instruction_file }}
                         {% if form.system_instruction_file.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.system_instruction_file.errors[0] }}
-                            </div>
+                        <div class="invalid-feedback d-block">
+                            {{ form.system_instruction_file.errors[0] }}
+                        </div>
                         {% endif %}
                         <div class="form-text">
-                            Path to markdown file with system instructions. Once set, it will be remembered for future requests.
+                            Path to markdown file with system instructions. Once set, it will be remembered for future
+                            requests.
                         </div>
                     </div>
 
-                    <!-- Input Text -->
+                    <!-- Input Mode Selection -->
                     <div class="mb-3">
+                        <label class="form-label d-block">{{ form.input_mode.label }}</label>
+                        {% for subfield in form.input_mode %}
+                        <div class="form-check form-check-inline">
+                            {{ subfield(class="form-check-input", onchange="toggleInputMode()") }}
+                            {{ subfield.label(class="form-check-label") }}
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Image Path (Hidden by default) -->
+                    <div class="mb-3 d-none" id="imagePathGroup">
+                        <label for="image_path" class="form-label">
+                            {{ form.image_path.label }} <span class="text-danger">*</span>
+                        </label>
+                        {{ form.image_path }}
+                        {% if form.image_path.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.image_path.errors[0] }}
+                        </div>
+                        {% endif %}
+                        <div class="form-text">Enter the absolute path to a local image file.</div>
+                    </div>
+
+                    <!-- Input Text -->
+                    <div class="mb-3" id="inputTextGroup">
                         <label for="input" class="form-label">
                             {{ form.input.label }} <span class="text-danger">*</span>
                         </label>
                         {{ form.input }}
                         {% if form.input.errors %}
-                            <div class="invalid-feedback d-block">
-                                {{ form.input.errors[0] }}
-                            </div>
+                        <div class="invalid-feedback d-block">
+                            {{ form.input.errors[0] }}
+                        </div>
                         {% endif %}
                         <div class="form-text">Enter your prompt or message for the model.</div>
                     </div>
@@ -97,7 +124,8 @@
                     <div class="accordion mb-3" id="optionalParams">
                         <div class="accordion-item">
                             <h2 class="accordion-header">
-                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOptional">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#collapseOptional">
                                     Optional Parameters
                                 </button>
                             </h2>
@@ -106,23 +134,25 @@
                                     <div class="row">
                                         <!-- Max Tokens -->
                                         <div class="col-md-4 mb-3">
-                                            <label for="max_tokens" class="form-label">{{ form.max_tokens.label }}</label>
+                                            <label for="max_tokens" class="form-label">{{ form.max_tokens.label
+                                                }}</label>
                                             {{ form.max_tokens }}
                                             {% if form.max_tokens.errors %}
-                                                <div class="invalid-feedback d-block">
-                                                    {{ form.max_tokens.errors[0] }}
-                                                </div>
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.max_tokens.errors[0] }}
+                                            </div>
                                             {% endif %}
                                         </div>
 
                                         <!-- Temperature -->
                                         <div class="col-md-4 mb-3">
-                                            <label for="temperature" class="form-label">{{ form.temperature.label }}</label>
+                                            <label for="temperature" class="form-label">{{ form.temperature.label
+                                                }}</label>
                                             {{ form.temperature }}
                                             {% if form.temperature.errors %}
-                                                <div class="invalid-feedback d-block">
-                                                    {{ form.temperature.errors[0] }}
-                                                </div>
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.temperature.errors[0] }}
+                                            </div>
                                             {% endif %}
                                             <div class="form-text small">Higher = more random</div>
                                         </div>
@@ -132,9 +162,9 @@
                                             <label for="top_p" class="form-label">{{ form.top_p.label }}</label>
                                             {{ form.top_p }}
                                             {% if form.top_p.errors %}
-                                                <div class="invalid-feedback d-block">
-                                                    {{ form.top_p.errors[0] }}
-                                                </div>
+                                            <div class="invalid-feedback d-block">
+                                                {{ form.top_p.errors[0] }}
+                                            </div>
                                             {% endif %}
                                             <div class="form-text small">Nucleus sampling</div>
                                         </div>
@@ -145,9 +175,9 @@
                                         <label for="metadata" class="form-label">{{ form.metadata.label }}</label>
                                         {{ form.metadata }}
                                         {% if form.metadata.errors %}
-                                            <div class="invalid-feedback d-block">
-                                                {{ form.metadata.errors[0] }}
-                                            </div>
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.metadata.errors[0] }}
+                                        </div>
                                         {% endif %}
                                         <div class="form-text">Optional metadata as JSON object</div>
                                     </div>
@@ -183,7 +213,8 @@
                     <div class="d-grid">
                         <button type="submit" class="btn btn-primary btn-lg" id="submitBtn">
                             <span class="submit-text">Submit Request</span>
-                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                            <span class="spinner-border spinner-border-sm d-none" role="status"
+                                aria-hidden="true"></span>
                         </button>
                     </div>
                 </form>
@@ -205,20 +236,20 @@
             </div>
             <div class="card-body">
                 {% if response_data._display_schema %}
-                    <!-- Auto-detected schema display -->
-                    {# Set all possible variables from display schema #}
-                    {% set content = response_data._display_schema.content %}
-                    {% set schema_type = response_data._display_schema.schema_type %}
-                    {% set columns = response_data._display_schema.columns %}
-                    {% set rows = response_data._display_schema.rows %}
-                    {% set totals = response_data._display_schema.totals %}
-                    {% include response_data._display_schema.template ignore missing %}
+                <!-- Auto-detected schema display -->
+                {# Set all possible variables from display schema #}
+                {% set content = response_data._display_schema.content %}
+                {% set schema_type = response_data._display_schema.schema_type %}
+                {% set columns = response_data._display_schema.columns %}
+                {% set rows = response_data._display_schema.rows %}
+                {% set totals = response_data._display_schema.totals %}
+                {% include response_data._display_schema.template ignore missing %}
                 {% elif response_data.output %}
-                    <!-- Fallback: Display raw output -->
-                    <p class="text-muted">Response received but could not be parsed.</p>
-                    <pre class="content-text">{{ response_data.output | tojson(indent=2) }}</pre>
+                <!-- Fallback: Display raw output -->
+                <p class="text-muted">Response received but could not be parsed.</p>
+                <pre class="content-text">{{ response_data.output | tojson(indent=2) }}</pre>
                 {% else %}
-                    <p class="text-muted">No output content available</p>
+                <p class="text-muted">No output content available</p>
                 {% endif %}
             </div>
         </div>
@@ -235,7 +266,8 @@
                         <h6 class="text-muted mb-3">Response Time</h6>
                         <div class="metric-item">
                             <span class="metric-label">Latency:</span>
-                            <span class="metric-value">{{ response_data._metrics.latency_ms }} ms ({{ response_data._metrics.latency_seconds }}s)</span>
+                            <span class="metric-value">{{ response_data._metrics.latency_ms }} ms ({{
+                                response_data._metrics.latency_seconds }}s)</span>
                         </div>
                     </div>
                     <div class="col-md-6">
@@ -290,7 +322,8 @@
         <div class="card">
             <div class="card-header bg-secondary text-white">
                 <h5 class="mb-0">
-                    <button class="btn btn-link text-white text-decoration-none p-0" type="button" data-bs-toggle="collapse" data-bs-target="#fullResponse">
+                    <button class="btn btn-link text-white text-decoration-none p-0" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#fullResponse">
                         Full JSON Response (Click to expand)
                     </button>
                 </h5>
@@ -320,7 +353,7 @@
 {% block scripts %}
 <script>
     // Add loading state to submit button
-    document.getElementById('apiForm').addEventListener('submit', function(e) {
+    document.getElementById('apiForm').addEventListener('submit', function (e) {
         const btn = document.getElementById('submitBtn');
         const text = btn.querySelector('.submit-text');
         const spinner = btn.querySelector('.spinner-border');
@@ -329,5 +362,23 @@
         spinner.classList.remove('d-none');
         btn.disabled = true;
     });
+
+    // Handle Input Mode Toggle
+    function toggleInputMode() {
+        const mode = document.querySelector('input[name="input_mode"]:checked').value;
+        const textGroup = document.getElementById('inputTextGroup');
+        const imageGroup = document.getElementById('imagePathGroup');
+
+        if (mode === 'image') {
+            textGroup.classList.add('d-none');
+            imageGroup.classList.remove('d-none');
+        } else {
+            textGroup.classList.remove('d-none');
+            imageGroup.classList.add('d-none');
+        }
+    }
+
+    // Initialize toggle state on load
+    document.addEventListener('DOMContentLoaded', toggleInputMode);
 </script>
 {% endblock %}

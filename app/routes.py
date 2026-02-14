@@ -92,8 +92,24 @@ def index():
             # Step 3: Prepare API parameters
             params = {
                 'model': form.model.data,
-                'input': form.input.data
+                'input': form.input.data,  # May be empty in image mode
+                'input_mode': form.input_mode.data
             }
+
+            # Validate input based on mode
+            if form.input_mode.data == 'text':
+                if not form.input.data or not form.input.data.strip():
+                    raise ValueError("Input text is required in text mode")
+            elif form.input_mode.data == 'image':
+                if not form.image_path.data or not form.image_path.data.strip():
+                    raise ValueError("Image path is required in image mode")
+                
+                image_path = form.image_path.data.strip()
+                if not os.path.exists(image_path):
+                    raise ValueError(f"Image file not found at: {image_path}")
+                
+                params['image_path'] = image_path
+                logger.info(f"Processing image input: {image_path}")
 
             # Add system instruction if available (top-level parameter)
             if system_instruction:
