@@ -56,7 +56,7 @@ class ResponsesAPIForm(FlaskForm):
 
     input_mode = RadioField(
         'Input Mode',
-        choices=[('text', 'Text'), ('image', 'Image')],
+        choices=[('text', 'Text'), ('image', 'Image'), ('voice', 'Voice')],
         default='text',
         render_kw={"class": "btn-group-toggle"}
     )
