@@ -86,8 +86,13 @@
                         <label class="form-label d-block">{{ form.input_mode.label }}</label>
                         {% for subfield in form.input_mode %}
                         <div class="form-check form-check-inline">
+                            {% if subfield.data == 'voice' %}
+                            {{ subfield(class="form-check-input", disabled=true) }}
+                            {{ subfield.label(class="form-check-label text-muted", style="cursor: not-allowed;", data_bs_toggle="tooltip", data_bs_placement="top", title="Coming Soon") }}
+                            {% else %}
                             {{ subfield(class="form-check-input", onchange="toggleInputMode()") }}
                             {{ subfield.label(class="form-check-label") }}
+                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>
@@ -379,6 +384,14 @@
     }
 
     // Initialize toggle state on load
-    document.addEventListener('DOMContentLoaded', toggleInputMode);
+    document.addEventListener('DOMContentLoaded', function() {
+        toggleInputMode();
+
+        // Initialize Bootstrap tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
 </script>
 {% endblock %}
