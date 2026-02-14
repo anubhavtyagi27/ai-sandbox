@@ -9,6 +9,8 @@ import requests
 import logging
 from typing import Dict, List, Any, Tuple, Optional
 
+import base64
+import mimetypes
 from .base import BaseProvider
 
 logger = logging.getLogger(__name__)
@@ -141,6 +143,14 @@ class OpenAIProvider(BaseProvider):
             }
         }
 
+    def _encode_image(self, image_path: str) -> str:
+        """Helper to encode image file to base64"""
+        try:
+            with open(image_path, "rb") as image_file:
+                return base64.b64encode(image_file.read()).decode('utf-8')
+        except Exception as e:
+            raise OpenAIError(f"Failed to read image file: {str(e)}")
+
     def create_response(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Call OpenAI Responses API.
@@ -162,9 +172,79 @@ class OpenAIProvider(BaseProvider):
         try:
             logger.info(f"Making request to OpenAI Responses API with model: {params.get('model')}")
 
+            # specific payload construction for OpenAI Responses API
+            # The 'messages' parameter has been renamed to 'input' in the Responses API
+            # Items in 'input' require 'type': 'message'
+            # Content items require 'type': 'input_text' or 'input_image'
+            payload = {
+                "model": params.get('model'),
+                "input": []
+            }
+
+            # Add system message
+            if params.get('instructions'):
+                payload['input'].append({
+                    "type": "message",
+                    "role": "system",
+                    "content": [{
+                        "type": "input_text",
+                        "text": params['instructions']
+                    }]
+                })
+
+            # Construct user message content
+            image_path = params.get('image_path')
+            user_content = []
+
+            if image_path:
+                # Image mode / Multimodal
+                mime_type, _ = mimetypes.guess_type(image_path)
+                if not mime_type:
+                    mime_type = "image/jpeg"
+
+                base64_image = self._encode_image(image_path)
+                
+                # Add image part
+                user_content.append({
+                    "type": "input_image",
+                    "image_url": f"data:{mime_type};base64,{base64_image}"
+                })
+                
+                # Add text part if present
+                if params.get('input'):
+                     user_content.append({
+                        "type": "input_text",
+                        "text": params['input']
+                    })
+            else:
+                # Text only mode
+                if params.get('input'):
+                     user_content.append({
+                        "type": "input_text",
+                        "text": params['input']
+                    })
+            
+            # Add user message to input list
+            if user_content:
+                payload['input'].append({
+                    "type": "message",
+                    "role": "user",
+                    "content": user_content
+                })
+
+            # Copy other optional parameters
+            # Note: max_tokens is renamed to max_output_tokens in Responses API
+            if 'max_tokens' in params:
+                 payload['max_output_tokens'] = params['max_tokens']
+
+            optional_params = ['temperature', 'top_p', 'stream', 'store', 'metadata']
+            for param in optional_params:
+                if param in params:
+                    payload[param] = params[param]
+
             response = self.session.post(
                 url,
-                json=params,
+                json=payload,
                 timeout=self.timeout
             )
 
@@ -260,7 +340,9 @@ class OpenAIProvider(BaseProvider):
             return False, "Model is required"
 
         if 'input' not in params or not params['input']:
-            return False, "Input is required"
+            # Exception: Input is not required if image_path is present (Image Mode)
+            if not params.get('image_path'):
+                return False, "Input is required in text mode"
 
         # Validate optional numeric parameters
         if 'temperature' in params:
