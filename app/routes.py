@@ -8,10 +8,73 @@ import json
 import logging
 import os
 import time
+from datetime import datetime, timezone
 
 # Create blueprint for routes
 bp = Blueprint('main', __name__)
 logger = logging.getLogger(__name__)
+
+
+def _format_created_at(created_value):
+    """
+    Normalize provider timestamp fields into a readable local date/time string.
+
+    Supports Unix timestamps (seconds/ms), ISO-8601 strings, or passthrough fallback.
+    """
+    if created_value is None:
+        return None
+
+    # Numeric timestamps (seconds or milliseconds)
+    try:
+        ts = float(created_value)
+        if ts > 1_000_000_000_000:  # milliseconds
+            ts /= 1000.0
+        dt = datetime.fromtimestamp(ts, tz=timezone.utc).astimezone()
+        return dt.strftime("%Y-%m-%d %I:%M:%S %p %Z")
+    except (TypeError, ValueError, OSError):
+        pass
+
+    # ISO string timestamps
+    try:
+        raw = str(created_value).strip()
+        dt = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone().strftime("%Y-%m-%d %I:%M:%S %p %Z")
+    except (TypeError, ValueError):
+        return str(created_value)
+
+
+def _extract_output_parameters(response_data):
+    """
+    Build a concise set of useful output parameters for the response UI.
+    """
+    output_parameters = {}
+
+    if response_data.get('id'):
+        output_parameters['Response ID'] = response_data.get('id')
+    if response_data.get('status'):
+        output_parameters['Status'] = response_data.get('status')
+    if response_data.get('max_output_tokens') is not None:
+        output_parameters['Max Output Tokens'] = response_data.get('max_output_tokens')
+    if response_data.get('parallel_tool_calls') is not None:
+        output_parameters['Parallel Tool Calls'] = response_data.get('parallel_tool_calls')
+    if response_data.get('store') is not None:
+        output_parameters['Stored'] = response_data.get('store')
+    if response_data.get('truncation'):
+        output_parameters['Truncation'] = response_data.get('truncation')
+
+    reasoning = response_data.get('reasoning')
+    if isinstance(reasoning, dict):
+        effort = reasoning.get('effort')
+        if effort:
+            output_parameters['Reasoning Effort'] = effort
+
+    output = response_data.get('output')
+    if isinstance(output, list):
+        output_parameters['Output Items'] = len(output)
+
+    return output_parameters
 
 
 @bp.route('/', methods=['GET', 'POST'])
@@ -151,14 +214,17 @@ def index():
             latency_seconds = end_time - start_time
 
             # Extract metrics for display
+            created_raw = response_data.get('created_at') or response_data.get('created')
             metrics = {
                 'latency_ms': round(latency_seconds * 1000, 2),
                 'latency_seconds': round(latency_seconds, 2),
                 'model': response_data.get('model', 'N/A'),
-                'created_at': response_data.get('created_at'),
+                'created_at_raw': created_raw,
+                'created_at_display': _format_created_at(created_raw),
                 'completion_tokens': None,
                 'prompt_tokens': None,
-                'total_tokens': None
+                'total_tokens': None,
+                'output_parameters': _extract_output_parameters(response_data)
             }
 
             # Try to extract token usage (structure may vary)
