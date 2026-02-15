@@ -266,35 +266,49 @@
                 <h5 class="mb-0">Performance Metrics</h5>
             </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6 class="text-muted mb-3">Response Time</h6>
-                        <div class="metric-item">
-                            <span class="metric-label">Latency:</span>
-                            <span class="metric-value">{{ response_data._metrics.latency_ms }} ms ({{
-                                response_data._metrics.latency_seconds }}s)</span>
-                        </div>
+                {% set latency_ms = response_data._metrics.latency_ms %}
+                {% set latency_seconds = response_data._metrics.latency_seconds %}
+                {% set prompt_tokens = response_data._metrics.prompt_tokens %}
+                {% set completion_tokens = response_data._metrics.completion_tokens %}
+                {% set total_tokens = response_data._metrics.total_tokens %}
+                {% set has_token_usage = total_tokens is not none %}
+
+                <div class="metrics-grid">
+                    <div class="metric-tile metric-tile-latency">
+                        <p class="metric-tile-label">Latency</p>
+                        <p class="metric-tile-value">
+                            {{ "{:,.0f}".format(latency_ms) }}<span class="metric-tile-unit">ms</span>
+                        </p>
+                        <p class="metric-tile-subtext">{{ "{:.2f}".format(latency_seconds) }}s</p>
                     </div>
-                    <div class="col-md-6">
-                        <h6 class="text-muted mb-3">Token Usage</h6>
-                        {% if response_data._metrics.total_tokens %}
-                        <div class="metric-item">
-                            <span class="metric-label">Prompt Tokens:</span>
-                            <span class="metric-value">{{ response_data._metrics.prompt_tokens or 'N/A' }}</span>
-                        </div>
-                        <div class="metric-item">
-                            <span class="metric-label">Completion Tokens:</span>
-                            <span class="metric-value">{{ response_data._metrics.completion_tokens or 'N/A' }}</span>
-                        </div>
-                        <div class="metric-item">
-                            <span class="metric-label">Total Tokens:</span>
-                            <span class="metric-value font-weight-bold">{{ response_data._metrics.total_tokens }}</span>
-                        </div>
+                    <div class="metric-tile metric-tile-total">
+                        <p class="metric-tile-label">Total Tokens</p>
+                        {% if has_token_usage %}
+                        <p class="metric-tile-value">
+                            {{ "{:,}".format(total_tokens) }}
+                        </p>
                         {% else %}
-                        <p class="text-muted mb-0">Token usage not available</p>
+                        <p class="metric-tile-subtext">Not available</p>
+                        {% endif %}
+                    </div>
+                    <div class="metric-tile metric-tile-prompt">
+                        <p class="metric-tile-label">Prompt Tokens</p>
+                        {% if has_token_usage %}
+                        <p class="metric-tile-value">{{ "{:,}".format(prompt_tokens or 0) }}</p>
+                        {% else %}
+                        <p class="metric-tile-subtext">Not available</p>
+                        {% endif %}
+                    </div>
+                    <div class="metric-tile metric-tile-completion">
+                        <p class="metric-tile-label">Completion Tokens</p>
+                        {% if has_token_usage %}
+                        <p class="metric-tile-value">{{ "{:,}".format(completion_tokens or 0) }}</p>
+                        {% else %}
+                        <p class="metric-tile-subtext">Not available</p>
                         {% endif %}
                     </div>
                 </div>
+
                 <hr>
                 <div class="row mt-3">
                     <div class="col-md-12">
@@ -311,14 +325,28 @@
                             <span class="metric-label">Model:</span>
                             <span class="metric-value">{{ response_data._metrics.model }}</span>
                         </div>
-                        {% if response_data._metrics.created_at %}
+                        {% if response_data._metrics.created_at_display %}
                         <div class="metric-item">
                             <span class="metric-label">Created At:</span>
-                            <span class="metric-value">{{ response_data._metrics.created_at }}</span>
+                            <span class="metric-value">{{ response_data._metrics.created_at_display }}</span>
                         </div>
                         {% endif %}
                     </div>
                 </div>
+                {% if response_data._metrics.output_parameters %}
+                <hr>
+                <div class="row mt-3">
+                    <div class="col-md-12">
+                        <h6 class="text-muted mb-3">Output Parameters</h6>
+                        {% for param_name, param_value in response_data._metrics.output_parameters.items() %}
+                        <div class="metric-item">
+                            <span class="metric-label">{{ param_name }}:</span>
+                            <span class="metric-value">{{ param_value }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
         {% endif %}

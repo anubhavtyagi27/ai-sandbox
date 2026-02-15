@@ -22,6 +22,14 @@ instance/
 *.swo
 *~
 
+# AI / agent (local config, rules, state – keep cursor.md / AGENTS.md in repo if desired)
+.cursor/
+.claude/
+.aider*
+.continue/
+.windsurf/
+.codex/
+
 # OS
 .DS_Store
 Thumbs.db
