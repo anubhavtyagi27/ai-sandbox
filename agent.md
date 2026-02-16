@@ -1,3 +1,4 @@
+````markdown
 # CLAUDE.md — AI Sandbox
 
 Guidelines for AI assistants working on this codebase.
@@ -136,3 +137,4 @@ ai-sandbox/
 - `onepassword.py` uses subprocess with no timeout to allow biometric auth prompts
 - No database — all state is in Flask sessions (provider selection, system instruction file path)
 - No CI/CD pipeline configured
+
