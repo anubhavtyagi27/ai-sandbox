@@ -1,5 +1,5 @@
 ````markdown
-# CLAUDE.md — AI Sandbox
+# AI Sandbox
 
 Guidelines for AI assistants working on this codebase.
 
