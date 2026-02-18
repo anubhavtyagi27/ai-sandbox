@@ -4,16 +4,14 @@ from typing import Any, Dict
 
 from flask import Blueprint, jsonify, request
 
-from app.services.gemini_client import (
-    GeminiServiceError,
-    analyse_meal_from_image,
-    analyse_meal_from_text,
-)
+from app.services.gemini_client import GeminiMealAnalysisService, GeminiServiceError
 
 bp = Blueprint("meals", __name__, url_prefix="/api/meals")
 logger = logging.getLogger(__name__)
 
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png"}
+
+_service = GeminiMealAnalysisService()
 
 
 def _json_error(message: str, status_code: int):
@@ -37,7 +35,7 @@ def analyse_text():
         if not isinstance(description, str) or not description.strip():
             return _json_error("Field 'description' is required.", 400)
 
-        result = analyse_meal_from_text(description.strip())
+        result = _service.analyse_meal_from_text(description.strip())
         return jsonify(result), 200
 
     except GeminiServiceError as exc:
@@ -73,7 +71,7 @@ def analyse_image():
                 "Field 'mimeType' must be one of: image/jpeg, image/png.", 400
             )
 
-        result = analyse_meal_from_image(image_data.strip(), mime_type)
+        result = _service.analyse_meal_from_image(image_data.strip(), mime_type)
         return jsonify(result), 200
 
     except GeminiServiceError as exc:

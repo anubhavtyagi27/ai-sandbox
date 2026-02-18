@@ -5,17 +5,17 @@ Central registry for all AI provider implementations.
 Provides factory functions to get provider instances.
 """
 
-from typing import Dict, Type, Optional
+from typing import Dict, Optional, Type
 
 from .base import BaseProvider
+from .gemini import GeminiProvider
 from .openai import OpenAIProvider
-
 
 # Provider registry - maps provider names to their classes
 PROVIDERS: Dict[str, Type[BaseProvider]] = {
-    'openai': OpenAIProvider,
+    "openai": OpenAIProvider,
+    "gemini": GeminiProvider,
     # Future providers will be added here:
-    # 'gemini': GeminiProvider,
     # 'anthropic': AnthropicProvider,
 }
 
@@ -69,7 +69,7 @@ def list_providers() -> Dict[str, str]:
         # Create a temporary instance to get the display name
         # (using dummy API key since we only need the name property)
         try:
-            temp_instance = provider_class(api_key='dummy')
+            temp_instance = provider_class(api_key="dummy")
             result[name] = temp_instance.name
         except Exception:
             # If instantiation fails, use capitalized name as fallback
@@ -79,10 +79,11 @@ def list_providers() -> Dict[str, str]:
 
 
 __all__ = [
-    'BaseProvider',
-    'OpenAIProvider',
-    'PROVIDERS',
-    'get_provider_class',
-    'get_provider',
-    'list_providers',
+    "BaseProvider",
+    "OpenAIProvider",
+    "GeminiProvider",
+    "PROVIDERS",
+    "get_provider_class",
+    "get_provider",
+    "list_providers",
 ]

@@ -1,10 +1,13 @@
 """
-Gemini Meal Analysis Service
+Gemini Meal Analysis Client
+
+Orchestrates meal analysis using GeminiProvider for HTTP calls.
+Handles the meal-specific prompt construction, retry logic, and
+response schema validation on top of the provider layer.
 
 Setup:
-1) Configure `OP_ITEM_REFERENCE_GEMINI` in `.env` / `.env.example`
+1) Configure `OP_ITEM_REFERENCE_GEMINI` in `.env`
 2) Ensure 1Password CLI is installed and authenticated
-3) This service calls Gemini REST API (`gemini-2.5-flash`) via `requests`
 """
 
 from __future__ import annotations
@@ -13,16 +16,13 @@ import json
 import logging
 from typing import Any, Dict, List
 
-import requests
-
-from config import Config
+from app.providers.gemini import GeminiError, GeminiProvider
 from app.services.onepassword import OnePasswordError, OnePasswordService
+from config import Config
 
 logger = logging.getLogger(__name__)
 
-GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 GEMINI_MODEL = "gemini-2.5-flash"
-GENERATE_CONTENT_PATH = f"/models/{GEMINI_MODEL}:generateContent"
 
 SUCCESS_FIELDS = {
     "success",
@@ -53,28 +53,52 @@ STRICT_JSON_PROMPT = (
 )
 
 
+# ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
+
+
 class GeminiServiceError(Exception):
-    """Base exception for Gemini meal analysis service."""
+    """Base exception for Gemini meal analysis errors."""
 
 
 class GeminiAuthenticationError(GeminiServiceError):
-    """Raised when auth/key retrieval fails."""
+    """Raised when API key retrieval or authentication fails."""
 
 
 class GeminiAPIError(GeminiServiceError):
-    """Raised when Gemini API call fails."""
+    """Raised when the Gemini API call fails."""
 
 
 class GeminiResponseParseError(GeminiServiceError):
-    """Raised when Gemini response cannot be parsed into expected JSON shape."""
+    """Raised when the response cannot be parsed into the expected schema."""
+
+
+# ---------------------------------------------------------------------------
+# Service
+# ---------------------------------------------------------------------------
 
 
 class GeminiMealAnalysisService:
-    """Service for meal analysis via Gemini REST API."""
+    """Orchestrates meal analysis via GeminiProvider."""
 
-    def __init__(self) -> None:
-        self.session = requests.Session()
-        self.endpoint = f"{GEMINI_API_BASE}{GENERATE_CONTENT_PATH}"
+    def _get_provider(self) -> GeminiProvider:
+        """Instantiate a GeminiProvider with the API key from 1Password."""
+        try:
+            op_reference = Config.get_provider_reference("gemini")
+            api_key = OnePasswordService.get_secret(op_reference)
+        except OnePasswordError as exc:
+            logger.error("Failed retrieving Gemini key from 1Password: %s", exc)
+            raise GeminiAuthenticationError(
+                "Failed to retrieve Gemini API key"
+            ) from exc
+        except ValueError as exc:
+            logger.error("Gemini provider reference misconfigured: %s", exc)
+            raise GeminiAuthenticationError(
+                "Gemini provider is not configured"
+            ) from exc
+
+        return GeminiProvider(api_key=api_key)
 
     def analyse_meal_from_text(self, description: str) -> Dict[str, Any]:
         if not description or not description.strip():
@@ -83,7 +107,8 @@ class GeminiMealAnalysisService:
                 "error": "Could not identify food items in the provided input.",
             }
 
-        payload = {
+        params = {
+            "model": GEMINI_MODEL,
             "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
             "contents": [
                 {
@@ -99,16 +124,19 @@ class GeminiMealAnalysisService:
                 }
             ],
         }
-        return self._execute_with_retry(payload)
+        return self._execute_with_retry(params)
 
-    def analyse_meal_from_image(self, base64_image: str, mime_type: str) -> Dict[str, Any]:
+    def analyse_meal_from_image(
+        self, base64_image: str, mime_type: str
+    ) -> Dict[str, Any]:
         if not base64_image or not base64_image.strip():
             return {
                 "success": False,
                 "error": "Could not identify food items in the provided input.",
             }
 
-        payload = {
+        params = {
+            "model": GEMINI_MODEL,
             "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
             "contents": [
                 {
@@ -130,23 +158,26 @@ class GeminiMealAnalysisService:
                 }
             ],
         }
-        return self._execute_with_retry(payload)
+        return self._execute_with_retry(params)
 
-    def _execute_with_retry(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        api_key = self._get_api_key()
+    def _execute_with_retry(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        provider = self._get_provider()
 
         for attempt in range(2):
             if attempt == 1:
-                payload = self._with_strict_retry_instruction(payload)
+                params = self._with_strict_retry_instruction(params)
 
-            raw = self._call_gemini(payload, api_key)
             try:
-                parsed = self._extract_and_parse(raw)
-                self._validate_result_shape(parsed)
+                raw = provider.create_response(params)
+            except GeminiError as exc:
+                raise GeminiAPIError(str(exc)) from exc
+
+            try:
+                parsed = self._extract_and_validate(provider, raw)
                 return parsed
             except GeminiResponseParseError as exc:
                 logger.warning(
-                    "Gemini response parse validation failed (attempt %s/2): %s",
+                    "Gemini response parse/validation failed (attempt %s/2): %s",
                     attempt + 1,
                     str(exc),
                 )
@@ -155,76 +186,30 @@ class GeminiMealAnalysisService:
 
         raise GeminiResponseParseError("Failed to parse Gemini response after retry")
 
-    def _get_api_key(self) -> str:
-        try:
-            op_reference = Config.get_provider_reference("gemini")
-            return OnePasswordService.get_secret(op_reference)
-        except OnePasswordError as exc:
-            logger.error("Failed retrieving Gemini key from 1Password: %s", str(exc))
-            raise GeminiAuthenticationError("Failed to retrieve Gemini API key") from exc
-        except ValueError as exc:
-            logger.error("Gemini provider reference misconfigured: %s", str(exc))
-            raise GeminiAuthenticationError("Gemini provider is not configured") from exc
+    def _extract_and_validate(
+        self, provider: GeminiProvider, raw: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Use provider.parse_response() then strip fences and validate schema."""
+        parsed_response = provider.parse_response(raw)
+        text_body = parsed_response.get("content", "")
 
-    def _call_gemini(self, payload: Dict[str, Any], api_key: str) -> Dict[str, Any]:
-        headers = {"Content-Type": "application/json"}
-        params = {"key": api_key}
-
-        try:
-            response = self.session.post(
-                self.endpoint,
-                headers=headers,
-                params=params,
-                json=payload,
-                timeout=60,
-            )
-        except requests.RequestException as exc:
-            logger.error("Gemini request failed before response: %s", str(exc))
-            raise GeminiAPIError("Gemini API request failed") from exc
-
-        if response.status_code != 200:
-            body = response.text[:500]
-            logger.error(
-                "Gemini API error status=%s body=%s", response.status_code, body
-            )
-            raise GeminiAPIError(
-                f"Gemini API returned status {response.status_code}."
-            )
-
-        try:
-            return response.json()
-        except ValueError as exc:
-            logger.error("Gemini API returned non-JSON response")
-            raise GeminiAPIError("Gemini API returned invalid JSON response") from exc
-
-    def _with_strict_retry_instruction(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        updated = json.loads(json.dumps(payload))
-        instruction = updated.setdefault("system_instruction", {}).setdefault("parts", [])
-        instruction.append({"text": STRICT_JSON_PROMPT})
-        return updated
-
-    def _extract_and_parse(self, response_json: Dict[str, Any]) -> Dict[str, Any]:
-        candidates = response_json.get("candidates")
-        if not isinstance(candidates, list) or not candidates:
-            raise GeminiResponseParseError("Gemini response missing candidates")
-
-        content = candidates[0].get("content", {})
-        parts = content.get("parts", [])
-
-        text_chunks: List[str] = []
-        for part in parts:
-            if isinstance(part, dict) and isinstance(part.get("text"), str):
-                text_chunks.append(part["text"])
-
-        text_body = "\n".join(text_chunks).strip()
         if not text_body:
             raise GeminiResponseParseError("Gemini response contained empty text")
 
         cleaned = self._strip_code_fences(text_body)
         try:
-            return json.loads(cleaned)
+            data = json.loads(cleaned)
         except json.JSONDecodeError as exc:
             raise GeminiResponseParseError("Model output is not valid JSON") from exc
+
+        self._validate_result_shape(data)
+        return data
+
+    def _with_strict_retry_instruction(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        updated = json.loads(json.dumps(params))
+        parts = updated.setdefault("system_instruction", {}).setdefault("parts", [])
+        parts.append({"text": STRICT_JSON_PROMPT})
+        return updated
 
     def _strip_code_fences(self, value: str) -> str:
         content = value.strip()
@@ -276,20 +261,5 @@ class GeminiMealAnalysisService:
         for key in MACRO_FIELDS:
             if key not in payload:
                 raise GeminiResponseParseError(f"{context} missing {key}")
-            if not isinstance(payload.get(key), (int, float)):
-                raise GeminiResponseParseError(
-                    f"{context} field {key} must be numeric"
-                )
-
-
-_service = GeminiMealAnalysisService()
-
-
-def analyse_meal_from_text(description: str) -> Dict[str, Any]:
-    """Analyse meal nutrition from natural language text."""
-    return _service.analyse_meal_from_text(description)
-
-
-def analyse_meal_from_image(base64_image: str, mime_type: str) -> Dict[str, Any]:
-    """Analyse meal nutrition from a base64 image payload."""
-    return _service.analyse_meal_from_image(base64_image, mime_type)
+            if not isinstance(payload[key], (int, float)):
+                raise GeminiResponseParseError(f"{context} field {key} must be numeric")
