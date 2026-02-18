@@ -4,7 +4,7 @@ from unittest.mock import patch
 from flask import Flask
 
 from app.routes_meals import bp
-from app.services.gemini_service import GeminiServiceError
+from app.services.gemini_client import GeminiServiceError
 
 
 class TestMealsRoutes(unittest.TestCase):
@@ -26,9 +26,7 @@ class TestMealsRoutes(unittest.TestCase):
         self.assertIn("image", response.get_json()["error"])
 
     def test_missing_mime_type_returns_400(self):
-        response = self.client.post(
-            "/api/meals/analyse/image", json={"image": "abc"}
-        )
+        response = self.client.post("/api/meals/analyse/image", json={"image": "abc"})
         self.assertEqual(response.status_code, 400)
         self.assertIn("mimeType", response.get_json()["error"])
 

@@ -4,7 +4,7 @@ from typing import Any, Dict
 
 from flask import Blueprint, jsonify, request
 
-from app.services.gemini_service import (
+from app.services.gemini_client import (
     GeminiServiceError,
     analyse_meal_from_image,
     analyse_meal_from_text,

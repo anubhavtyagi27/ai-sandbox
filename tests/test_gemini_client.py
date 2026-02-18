@@ -1,8 +1,8 @@
-import unittest
 import json
+import unittest
 from unittest.mock import Mock, patch
 
-from app.services.gemini_service import (
+from app.services.gemini_client import (
     GeminiAPIError,
     GeminiMealAnalysisService,
     GeminiResponseParseError,
@@ -46,8 +46,9 @@ class TestGeminiMealAnalysisService(unittest.TestCase):
             "candidates": [{"content": {"parts": [{"text": json.dumps(model_json)}]}}]
         }
 
-        with patch.object(self.service, "_get_api_key", return_value="dummy"), patch.object(
-            self.service, "_call_gemini", return_value=gemini_response
+        with (
+            patch.object(self.service, "_get_api_key", return_value="dummy"),
+            patch.object(self.service, "_call_gemini", return_value=gemini_response),
         ):
             result = self.service.analyse_meal_from_text("2 rotis with dal makhani")
 
@@ -60,8 +61,9 @@ class TestGeminiMealAnalysisService(unittest.TestCase):
             "candidates": [{"content": {"parts": [{"text": json.dumps(model_json)}]}}]
         }
 
-        with patch.object(self.service, "_get_api_key", return_value="dummy"), patch.object(
-            self.service, "_call_gemini", return_value=gemini_response
+        with (
+            patch.object(self.service, "_get_api_key", return_value="dummy"),
+            patch.object(self.service, "_call_gemini", return_value=gemini_response),
         ):
             result = self.service.analyse_meal_from_image("abc123", "image/jpeg")
 
@@ -76,10 +78,15 @@ class TestGeminiMealAnalysisService(unittest.TestCase):
             ]
         }
 
-        with patch.object(self.service, "_get_api_key", return_value="dummy"), patch.object(
-            self.service, "_call_gemini", side_effect=[first, second]
-        ) as mock_call:
-            result = self.service.analyse_meal_from_text("aaj lunch mein dal chawal khaya")
+        with (
+            patch.object(self.service, "_get_api_key", return_value="dummy"),
+            patch.object(
+                self.service, "_call_gemini", side_effect=[first, second]
+            ) as mock_call,
+        ):
+            result = self.service.analyse_meal_from_text(
+                "aaj lunch mein dal chawal khaya"
+            )
 
         self.assertTrue(result["success"])
         self.assertEqual(mock_call.call_count, 2)
@@ -87,8 +94,9 @@ class TestGeminiMealAnalysisService(unittest.TestCase):
     def test_fail_when_retry_also_invalid(self):
         invalid = {"candidates": [{"content": {"parts": [{"text": "not-json"}]}}]}
 
-        with patch.object(self.service, "_get_api_key", return_value="dummy"), patch.object(
-            self.service, "_call_gemini", side_effect=[invalid, invalid]
+        with (
+            patch.object(self.service, "_get_api_key", return_value="dummy"),
+            patch.object(self.service, "_call_gemini", side_effect=[invalid, invalid]),
         ):
             with self.assertRaises(GeminiResponseParseError):
                 self.service.analyse_meal_from_text("anything")
@@ -112,8 +120,9 @@ class TestGeminiMealAnalysisService(unittest.TestCase):
             "candidates": [{"content": {"parts": [{"text": json.dumps(model_json)}]}}]
         }
 
-        with patch.object(self.service, "_get_api_key", return_value="dummy"), patch.object(
-            self.service, "_call_gemini", return_value=gemini_response
+        with (
+            patch.object(self.service, "_get_api_key", return_value="dummy"),
+            patch.object(self.service, "_call_gemini", return_value=gemini_response),
         ):
             result = self.service.analyse_meal_from_text("random words not food")
 
