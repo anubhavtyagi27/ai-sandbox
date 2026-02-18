@@ -185,6 +185,37 @@ AI Sandbox automatically detects the response format:
 - **Plain Text**: Shows in readable text format
 - **JSON**: Falls back to syntax-highlighted JSON view
 
+## Meal Analysis API (Gemini)
+
+Meal analysis endpoints are available for text and image inputs.
+These endpoints use Google Gemini (`gemini-2.5-flash`) through the REST API.
+
+### Prerequisite
+
+Configure Gemini in your `.env` file using a 1Password reference:
+
+```bash
+OP_ITEM_REFERENCE_GEMINI=op://Projects/Google Gemini Key/credential
+```
+
+### Endpoints
+
+#### Analyse from text
+
+```bash
+curl -X POST http://127.0.0.1:5001/api/meals/analyse/text \\
+  -H "Content-Type: application/json" \\
+  -d '{"description":"aaj lunch mein chole bhature khaye the"}'
+```
+
+#### Analyse from image
+
+```bash
+curl -X POST http://127.0.0.1:5001/api/meals/analyse/image \\
+  -H "Content-Type: application/json" \\
+  -d '{"image":"<base64-image>","mimeType":"image/jpeg"}'
+```
+
 ## Project Structure
 
 ```
@@ -192,6 +223,7 @@ ai-sandbox/
 ├── app/
 │   ├── __init__.py              # Flask app factory with blueprint registration
 │   ├── routes.py                # Route handlers with provider selection
+│   ├── routes_meals.py          # JSON API routes for Gemini meal analysis
 │   ├── forms.py                 # Dynamic form generation (provider-aware)
 │   │
 │   ├── providers/               # 🔥 Provider abstraction layer
@@ -208,7 +240,8 @@ ai-sandbox/
 │   │   └── text.py              # Text and JSON responses
 │   │
 │   ├── services/
-│   │   └── onepassword.py       # 1Password CLI integration
+│   │   ├── onepassword.py       # 1Password CLI integration
+│   │   └── gemini_service.py    # Gemini meal analysis integration
 │   │
 │   ├── templates/
 │   │   ├── base.html            # Base template with navigation

@@ -5,12 +5,13 @@ Implements the BaseProvider interface for OpenAI's API.
 Supports OpenAI Responses API endpoint.
 """
 
-import requests
-import logging
-from typing import Dict, List, Any, Tuple, Optional
-
 import base64
+import logging
 import mimetypes
+from typing import Any, Dict, List, Optional, Tuple
+
+import requests
+
 from .base import BaseProvider
 
 logger = logging.getLogger(__name__)
@@ -19,21 +20,25 @@ logger = logging.getLogger(__name__)
 # Custom exceptions for OpenAI-specific errors
 class OpenAIError(Exception):
     """Base exception for OpenAI API errors"""
+
     pass
 
 
 class OpenAIAuthenticationError(OpenAIError):
     """Authentication failed"""
+
     pass
 
 
 class OpenAIRateLimitError(OpenAIError):
     """Rate limit exceeded"""
+
     pass
 
 
 class OpenAIInvalidRequestError(OpenAIError):
     """Invalid request parameters"""
+
     pass
 
 
@@ -58,10 +63,9 @@ class OpenAIProvider(BaseProvider):
         super().__init__(api_key)
         self.timeout = timeout
         self.session = requests.Session()
-        self.session.headers.update({
-            'Authorization': f'Bearer {api_key}',
-            'Content-Type': 'application/json'
-        })
+        self.session.headers.update(
+            {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        )
 
     @property
     def name(self) -> str:
@@ -77,12 +81,12 @@ class OpenAIProvider(BaseProvider):
             List of (model_id, display_name) tuples
         """
         return [
-            ('gpt-4o', 'GPT-4o'),
-            ('gpt-5-pro', 'GPT-5 Pro'),
-            ('gpt-5', 'GPT-5'),
-            ('gpt-5-mini', 'GPT-5 Mini'),
-            ('o1', 'o1'),
-            ('o1-mini', 'o1-mini')
+            ("gpt-4o", "GPT-4o"),
+            ("gpt-5-pro", "GPT-5 Pro"),
+            ("gpt-5", "GPT-5"),
+            ("gpt-5-mini", "GPT-5 Mini"),
+            ("o1", "o1"),
+            ("o1-mini", "o1-mini"),
         ]
 
     @property
@@ -93,61 +97,61 @@ class OpenAIProvider(BaseProvider):
         Defines the parameters users can configure for API calls.
         """
         return {
-            'model': {
-                'type': 'select',
-                'label': 'Model',
-                'choices': self.models,
-                'required': True,
-                'default': 'gpt-4o'
+            "model": {
+                "type": "select",
+                "label": "Model",
+                "choices": self.models,
+                "required": True,
+                "default": "gpt-4o",
             },
-            'input': {
-                'type': 'textarea',
-                'label': 'Input / Message',
-                'required': True,
-                'placeholder': 'Enter your message or prompt...'
+            "input": {
+                "type": "textarea",
+                "label": "Input / Message",
+                "required": True,
+                "placeholder": "Enter your message or prompt...",
             },
-            'system_instruction_file': {
-                'type': 'text',
-                'label': 'System Instruction File Path (optional)',
-                'required': False,
-                'placeholder': '/path/to/instructions.md'
+            "system_instruction_file": {
+                "type": "text",
+                "label": "System Instruction File Path (optional)",
+                "required": False,
+                "placeholder": "/path/to/instructions.md",
             },
-            'temperature': {
-                'type': 'float',
-                'label': 'Temperature',
-                'min': 0.0,
-                'max': 2.0,
-                'default': 1.0,
-                'step': 0.1,
-                'required': False,
-                'help_text': 'Controls randomness. Lower is more focused, higher is more random.'
+            "temperature": {
+                "type": "float",
+                "label": "Temperature",
+                "min": 0.0,
+                "max": 2.0,
+                "default": 1.0,
+                "step": 0.1,
+                "required": False,
+                "help_text": "Controls randomness. Lower is more focused, higher is more random.",
             },
-            'max_tokens': {
-                'type': 'integer',
-                'label': 'Max Tokens',
-                'min': 1,
-                'default': None,
-                'required': False,
-                'placeholder': 'Leave empty for unlimited',
-                'help_text': 'Maximum number of tokens to generate.'
+            "max_tokens": {
+                "type": "integer",
+                "label": "Max Tokens",
+                "min": 1,
+                "default": None,
+                "required": False,
+                "placeholder": "Leave empty for unlimited",
+                "help_text": "Maximum number of tokens to generate.",
             },
-            'top_p': {
-                'type': 'float',
-                'label': 'Top P',
-                'min': 0.0,
-                'max': 1.0,
-                'default': 1.0,
-                'step': 0.1,
-                'required': False,
-                'help_text': 'Nucleus sampling. Alternative to temperature.'
-            }
+            "top_p": {
+                "type": "float",
+                "label": "Top P",
+                "min": 0.0,
+                "max": 1.0,
+                "default": 1.0,
+                "step": 0.1,
+                "required": False,
+                "help_text": "Nucleus sampling. Alternative to temperature.",
+            },
         }
 
     def _encode_image(self, image_path: str) -> str:
         """Helper to encode image file to base64"""
         try:
             with open(image_path, "rb") as image_file:
-                return base64.b64encode(image_file.read()).decode('utf-8')
+                return base64.b64encode(image_file.read()).decode("utf-8")
         except Exception as e:
             raise OpenAIError(f"Failed to read image file: {str(e)}")
 
@@ -170,30 +174,30 @@ class OpenAIProvider(BaseProvider):
         url = f"{self.API_BASE_URL}{self.RESPONSES_ENDPOINT}"
 
         try:
-            logger.info(f"Making request to OpenAI Responses API with model: {params.get('model')}")
+            logger.info(
+                f"Making request to OpenAI Responses API with model: {params.get('model')}"
+            )
 
             # specific payload construction for OpenAI Responses API
             # The 'messages' parameter has been renamed to 'input' in the Responses API
             # Items in 'input' require 'type': 'message'
             # Content items require 'type': 'input_text' or 'input_image'
-            payload = {
-                "model": params.get('model'),
-                "input": []
-            }
+            payload = {"model": params.get("model"), "input": []}
 
             # Add system message
-            if params.get('instructions'):
-                payload['input'].append({
-                    "type": "message",
-                    "role": "system",
-                    "content": [{
-                        "type": "input_text",
-                        "text": params['instructions']
-                    }]
-                })
+            if params.get("instructions"):
+                payload["input"].append(
+                    {
+                        "type": "message",
+                        "role": "system",
+                        "content": [
+                            {"type": "input_text", "text": params["instructions"]}
+                        ],
+                    }
+                )
 
             # Construct user message content
-            image_path = params.get('image_path')
+            image_path = params.get("image_path")
             user_content = []
 
             if image_path:
@@ -203,50 +207,40 @@ class OpenAIProvider(BaseProvider):
                     mime_type = "image/jpeg"
 
                 base64_image = self._encode_image(image_path)
-                
+
                 # Add image part
-                user_content.append({
-                    "type": "input_image",
-                    "image_url": f"data:{mime_type};base64,{base64_image}"
-                })
-                
+                user_content.append(
+                    {
+                        "type": "input_image",
+                        "image_url": f"data:{mime_type};base64,{base64_image}",
+                    }
+                )
+
                 # Add text part if present
-                if params.get('input'):
-                     user_content.append({
-                        "type": "input_text",
-                        "text": params['input']
-                    })
+                if params.get("input"):
+                    user_content.append({"type": "input_text", "text": params["input"]})
             else:
                 # Text only mode
-                if params.get('input'):
-                     user_content.append({
-                        "type": "input_text",
-                        "text": params['input']
-                    })
-            
+                if params.get("input"):
+                    user_content.append({"type": "input_text", "text": params["input"]})
+
             # Add user message to input list
             if user_content:
-                payload['input'].append({
-                    "type": "message",
-                    "role": "user",
-                    "content": user_content
-                })
+                payload["input"].append(
+                    {"type": "message", "role": "user", "content": user_content}
+                )
 
             # Copy other optional parameters
             # Note: max_tokens is renamed to max_output_tokens in Responses API
-            if 'max_tokens' in params:
-                 payload['max_output_tokens'] = params['max_tokens']
+            if "max_tokens" in params:
+                payload["max_output_tokens"] = params["max_tokens"]
 
-            optional_params = ['temperature', 'top_p', 'stream', 'store', 'metadata']
+            optional_params = ["temperature", "top_p", "stream", "store", "metadata"]
             for param in optional_params:
                 if param in params:
                     payload[param] = params[param]
 
-            response = self.session.post(
-                url,
-                json=payload,
-                timeout=self.timeout
-            )
+            response = self.session.post(url, json=payload, timeout=self.timeout)
 
             # Handle different status codes
             if response.status_code == 200:
@@ -259,7 +253,7 @@ class OpenAIProvider(BaseProvider):
                 )
 
             elif response.status_code == 429:
-                retry_after = response.headers.get('Retry-After', 'unknown')
+                retry_after = response.headers.get("Retry-After", "unknown")
                 raise OpenAIRateLimitError(
                     f"Rate limit exceeded. Please try again later. "
                     f"Retry after: {retry_after} seconds"
@@ -268,7 +262,9 @@ class OpenAIProvider(BaseProvider):
             elif response.status_code == 400:
                 try:
                     error_data = response.json()
-                    error_message = error_data.get('error', {}).get('message', 'Invalid request')
+                    error_message = error_data.get("error", {}).get(
+                        "message", "Invalid request"
+                    )
                     logger.error(f"OpenAI 400 error details: {error_data}")
                 except Exception:
                     error_message = response.text
@@ -310,19 +306,24 @@ class OpenAIProvider(BaseProvider):
         Returns:
             Parsed response with 'content' and 'metadata' fields
         """
-        # Extract the main content
-        content = response.get('choices', [{}])[0].get('message', {}).get('content', '')
+        # Extract text from Responses API output[].content[].text
+        text_chunks = []
+        for item in response.get("output", []):
+            for content_item in item.get("content", []):
+                if content_item.get("text"):
+                    text_chunks.append(content_item["text"])
+        content = "".join(text_chunks)
 
-        # Extract metadata
+        usage = response.get("usage", {})
         metadata = {
-            'model': response.get('model'),
-            'finish_reason': response.get('choices', [{}])[0].get('finish_reason'),
-            'usage': response.get('usage', {})
+            "model": response.get("model"),
+            "finish_reason": None,
+            "usage": usage,
         }
 
         return {
-            'content': content,
-            'metadata': metadata
+            "content": content,
+            "metadata": metadata,
         }
 
     def validate_parameters(self, params: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
@@ -336,27 +337,27 @@ class OpenAIProvider(BaseProvider):
             Tuple of (is_valid, error_message)
         """
         # Check required fields
-        if 'model' not in params or not params['model']:
+        if "model" not in params or not params["model"]:
             return False, "Model is required"
 
-        if 'input' not in params or not params['input']:
+        if "input" not in params or not params["input"]:
             # Exception: Input is not required if image_path is present (Image Mode)
-            if not params.get('image_path'):
+            if not params.get("image_path"):
                 return False, "Input is required in text mode"
 
         # Validate optional numeric parameters
-        if 'temperature' in params:
-            temp = params['temperature']
+        if "temperature" in params:
+            temp = params["temperature"]
             if not isinstance(temp, (int, float)) or not (0 <= temp <= 2):
                 return False, "Temperature must be a number between 0 and 2"
 
-        if 'top_p' in params:
-            top_p = params['top_p']
+        if "top_p" in params:
+            top_p = params["top_p"]
             if not isinstance(top_p, (int, float)) or not (0 <= top_p <= 1):
                 return False, "top_p must be a number between 0 and 1"
 
-        if 'max_tokens' in params:
-            max_tokens = params['max_tokens']
+        if "max_tokens" in params:
+            max_tokens = params["max_tokens"]
             if not isinstance(max_tokens, int) or max_tokens < 1:
                 return False, "max_tokens must be a positive integer"
 
@@ -372,16 +373,16 @@ class OpenAIProvider(BaseProvider):
         Returns:
             Dictionary of metrics (tokens, model, etc.)
         """
-        usage = response.get('usage', {})
+        usage = response.get("usage", {})
 
         return {
-            'prompt_tokens': usage.get('prompt_tokens', 0),
-            'completion_tokens': usage.get('completion_tokens', 0),
-            'total_tokens': usage.get('total_tokens', 0),
-            'model': response.get('model', 'unknown')
+            "prompt_tokens": usage.get("prompt_tokens", 0),
+            "completion_tokens": usage.get("completion_tokens", 0),
+            "total_tokens": usage.get("total_tokens", 0),
+            "model": response.get("model", "unknown"),
         }
 
     def __del__(self):
         """Clean up session on deletion"""
-        if hasattr(self, 'session'):
+        if hasattr(self, "session"):
             self.session.close()

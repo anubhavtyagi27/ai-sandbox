@@ -34,6 +34,8 @@ def create_app():
 
     # Register blueprints
     from app.routes import bp as main_bp
+    from app.routes_meals import bp as meals_bp
     app.register_blueprint(main_bp)
+    app.register_blueprint(meals_bp)
 
     return app
