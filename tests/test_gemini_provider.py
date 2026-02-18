@@ -137,7 +137,14 @@ class TestGeminiProviderValidateParameters(unittest.TestCase):
     def setUp(self):
         self.provider = GeminiProvider(api_key="test-key")
 
-    def test_valid_params(self):
+    def test_valid_params_with_input(self):
+        valid, msg = self.provider.validate_parameters(
+            {"model": "gemini-2.5-flash", "input": "Hi"}
+        )
+        self.assertTrue(valid)
+        self.assertIsNone(msg)
+
+    def test_valid_params_with_contents(self):
         valid, msg = self.provider.validate_parameters(
             {
                 "model": "gemini-2.5-flash",
@@ -148,20 +155,20 @@ class TestGeminiProviderValidateParameters(unittest.TestCase):
         self.assertIsNone(msg)
 
     def test_missing_model(self):
-        valid, msg = self.provider.validate_parameters({"contents": []})
+        valid, msg = self.provider.validate_parameters({"input": "Hi"})
         self.assertFalse(valid)
         self.assertIn("Model", msg)
 
-    def test_missing_contents(self):
+    def test_missing_input(self):
         valid, msg = self.provider.validate_parameters({"model": "gemini-2.5-flash"})
         self.assertFalse(valid)
-        self.assertIn("contents", msg)
+        self.assertIn("input", msg)
 
     def test_invalid_temperature(self):
         valid, msg = self.provider.validate_parameters(
             {
                 "model": "gemini-2.5-flash",
-                "contents": [{"role": "user", "parts": [{"text": "Hi"}]}],
+                "input": "Hi",
                 "temperature": 5.0,
             }
         )
@@ -172,7 +179,7 @@ class TestGeminiProviderValidateParameters(unittest.TestCase):
         valid, msg = self.provider.validate_parameters(
             {
                 "model": "gemini-2.5-flash",
-                "contents": [{"role": "user", "parts": [{"text": "Hi"}]}],
+                "input": "Hi",
                 "max_tokens": -1,
             }
         )

@@ -4,7 +4,7 @@ from unittest.mock import patch
 from flask import Flask
 
 from app.routes_meals import bp
-from app.services.gemini_client import GeminiServiceError
+from app.services.meal_analysis import MealAnalysisError
 
 
 class TestMealsRoutes(unittest.TestCase):
@@ -66,7 +66,7 @@ class TestMealsRoutes(unittest.TestCase):
 
     @patch("app.routes_meals._service")
     def test_service_error_returns_500(self, mock_service):
-        mock_service.analyse_meal_from_text.side_effect = GeminiServiceError("boom")
+        mock_service.analyse_meal_from_text.side_effect = MealAnalysisError("boom")
         response = self.client.post(
             "/api/meals/analyse/text", json={"description": "2 rotis with dal"}
         )

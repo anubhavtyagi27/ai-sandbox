@@ -4,14 +4,14 @@ from typing import Any, Dict
 
 from flask import Blueprint, jsonify, request
 
-from app.services.gemini_client import GeminiMealAnalysisService, GeminiServiceError
+from app.services.meal_analysis import MealAnalysisError, MealAnalysisService
 
 bp = Blueprint("meals", __name__, url_prefix="/api/meals")
 logger = logging.getLogger(__name__)
 
 ALLOWED_MIME_TYPES = {"image/jpeg", "image/png"}
 
-_service = GeminiMealAnalysisService()
+_service = MealAnalysisService()
 
 
 def _json_error(message: str, status_code: int):
@@ -38,8 +38,8 @@ def analyse_text():
         result = _service.analyse_meal_from_text(description.strip())
         return jsonify(result), 200
 
-    except GeminiServiceError as exc:
-        logger.error("Gemini service error on text analysis: %s", str(exc))
+    except MealAnalysisError as exc:
+        logger.error("Meal analysis error on text analysis: %s", str(exc))
         return _json_error("Failed to analyse meal text via Gemini.", 500)
     except Exception as exc:  # pragma: no cover
         logger.exception("Unexpected error in text analysis endpoint: %s", str(exc))
@@ -74,8 +74,8 @@ def analyse_image():
         result = _service.analyse_meal_from_image(image_data.strip(), mime_type)
         return jsonify(result), 200
 
-    except GeminiServiceError as exc:
-        logger.error("Gemini service error on image analysis: %s", str(exc))
+    except MealAnalysisError as exc:
+        logger.error("Meal analysis error on image analysis: %s", str(exc))
         return _json_error("Failed to analyse meal image via Gemini.", 500)
     except Exception as exc:  # pragma: no cover
         logger.exception("Unexpected error in image analysis endpoint: %s", str(exc))

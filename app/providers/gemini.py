@@ -119,17 +119,66 @@ class GeminiProvider(BaseProvider):
             },
         }
 
+    def _build_contents(self, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Build Gemini contents array from the shared params interface.
+
+        Accepts the same keys as OpenAIProvider so routes.py can call either
+        provider identically:
+          - input       (str) — user text message
+          - image_path  (str) — local image file path (multimodal)
+          - contents    (list) — pass-through if already in Gemini format
+
+        Returns:
+            Gemini-format contents list
+        """
+        # Pass-through if caller already built the contents array (e.g. gemini_client meal analysis)
+        if params.get("contents"):
+            return params["contents"]
+
+        user_parts: List[Dict[str, Any]] = []
+
+        image_path = params.get("image_path")
+        if image_path:
+            import base64
+            import mimetypes
+
+            mime_type, _ = mimetypes.guess_type(image_path)
+            if not mime_type:
+                mime_type = "image/jpeg"
+            try:
+                with open(image_path, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode("utf-8")
+            except Exception as exc:
+                raise GeminiError(f"Failed to read image file: {exc}") from exc
+            user_parts.append(
+                {"inline_data": {"mime_type": mime_type, "data": encoded}}
+            )
+
+        if params.get("input"):
+            user_parts.append({"text": params["input"]})
+
+        if not user_parts:
+            return []
+
+        return [{"role": "user", "parts": user_parts}]
+
     def create_response(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Call Gemini generateContent API.
 
-        Args:
-            params: Request parameters. Expected keys:
-                - model (str): Model ID
-                - contents (list): Gemini-format contents array
-                - system_instruction (dict, optional): System instruction object
-                - temperature (float, optional)
-                - max_tokens (int, optional)
+        Accepts the same top-level param keys as OpenAIProvider so routes.py
+        can call either provider identically:
+          - model           (str, required)
+          - input           (str) — user message text
+          - instructions    (str, optional) — system instruction text
+          - image_path      (str, optional) — local image file path
+          - temperature     (float, optional)
+          - max_tokens      (int, optional)
+
+        Also accepts pre-built Gemini-native params (used by meal analysis):
+          - contents        (list) — Gemini contents array (bypasses input/image_path)
+          - system_instruction (dict) — Gemini system_instruction object (bypasses instructions)
 
         Returns:
             Raw API response as dictionary
@@ -143,12 +192,16 @@ class GeminiProvider(BaseProvider):
         model = params.get("model", "gemini-2.5-flash")
         url = f"{self.API_BASE_URL}/models/{model}:generateContent"
 
-        payload: Dict[str, Any] = {
-            "contents": params.get("contents", []),
-        }
+        contents = self._build_contents(params)
+        payload: Dict[str, Any] = {"contents": contents}
 
+        # system_instruction: accept either pre-built Gemini dict or plain text string
         if params.get("system_instruction"):
             payload["system_instruction"] = params["system_instruction"]
+        elif params.get("instructions"):
+            payload["system_instruction"] = {
+                "parts": [{"text": params["instructions"]}]
+            }
 
         generation_config: Dict[str, Any] = {}
         if "temperature" in params and params["temperature"] is not None:
@@ -261,8 +314,12 @@ class GeminiProvider(BaseProvider):
         if not params.get("model"):
             return False, "Model is required"
 
-        if not params.get("contents"):
-            return False, "contents is required"
+        if (
+            not params.get("contents")
+            and not params.get("input")
+            and not params.get("image_path")
+        ):
+            return False, "input is required"
 
         if "temperature" in params and params["temperature"] is not None:
             temp = params["temperature"]

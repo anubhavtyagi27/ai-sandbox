@@ -1,265 +1,129 @@
-"""
-Gemini Meal Analysis Client
-
-Orchestrates meal analysis using GeminiProvider for HTTP calls.
-Handles the meal-specific prompt construction, retry logic, and
-response schema validation on top of the provider layer.
-
-Setup:
-1) Configure `OP_ITEM_REFERENCE_GEMINI` in `.env`
-2) Ensure 1Password CLI is installed and authenticated
-"""
-
-from __future__ import annotations
-
-import json
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, Optional, Tuple
 
-from app.providers.gemini import GeminiError, GeminiProvider
-from app.services.onepassword import OnePasswordError, OnePasswordService
-from config import Config
+from app.providers.gemini import (
+    GeminiAuthenticationError as _ProviderAuthError,
+)
+from app.providers.gemini import (
+    GeminiError,
+    GeminiProvider,
+)
+from app.providers.gemini import (
+    GeminiInvalidRequestError as _ProviderInvalidRequestError,
+)
+from app.providers.gemini import (
+    GeminiRateLimitError as _ProviderRateLimitError,
+)
 
 logger = logging.getLogger(__name__)
 
-GEMINI_MODEL = "gemini-2.5-flash"
 
-SUCCESS_FIELDS = {
-    "success",
-    "meal_name",
-    "identified_items",
-    "totals",
-    "confidence",
-    "notes",
-}
+class GeminiClientError(Exception):
+    """Base exception for Gemini client errors"""
 
-MACRO_FIELDS = ("calories", "protein_g", "carbs_g", "fat_g", "fibre_g")
-
-SYSTEM_PROMPT = (
-    "You are a nutrition expert specializing in Indian cuisine across regions "
-    "(North Indian, South Indian, Bengali, Gujarati, Maharashtrian, Punjabi, etc.). "
-    "Understand Hindi, English, and Hinglish meal descriptions. "
-    "Interpret common Indian portion descriptors such as katori, vati, cup, piece, handful, and glass. "
-    "Estimate calories/macros realistically and account for typical home-cooked vs restaurant differences where relevant. "
-    "Always return valid JSON only, with no markdown and no prose outside JSON. "
-    "If items are ambiguous, make a reasonable assumption and document it in notes. "
-    "If no food is detected, return exactly this shape: "
-    '{"success": false, "error": "Could not identify food items in the provided input."}'
-)
-
-STRICT_JSON_PROMPT = (
-    "Your previous response was not valid JSON for the required schema. "
-    "Return ONLY valid JSON with no markdown, no comments, and no extra keys."
-)
+    pass
 
 
-# ---------------------------------------------------------------------------
-# Exceptions
-# ---------------------------------------------------------------------------
+class GeminiAuthenticationError(GeminiClientError):
+    """Authentication failed"""
+
+    pass
 
 
-class GeminiServiceError(Exception):
-    """Base exception for Gemini meal analysis errors."""
+class GeminiRateLimitError(GeminiClientError):
+    """Rate limit exceeded"""
+
+    pass
 
 
-class GeminiAuthenticationError(GeminiServiceError):
-    """Raised when API key retrieval or authentication fails."""
+class GeminiInvalidRequestError(GeminiClientError):
+    """Invalid request parameters"""
+
+    pass
 
 
-class GeminiAPIError(GeminiServiceError):
-    """Raised when the Gemini API call fails."""
+class GeminiClient:
+    """Client for interacting with Google Gemini generateContent API"""
 
+    def __init__(self, api_key: str, timeout: Optional[int] = 60):
+        """
+        Initialize Gemini client.
 
-class GeminiResponseParseError(GeminiServiceError):
-    """Raised when the response cannot be parsed into the expected schema."""
+        Args:
+            api_key: Google AI API key
+            timeout: Request timeout in seconds (default 60)
+        """
+        self.api_key = api_key
+        self.timeout = timeout
+        self._provider = GeminiProvider(api_key=api_key, timeout=timeout)
 
+    def create_response(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Call Gemini generateContent API.
 
-# ---------------------------------------------------------------------------
-# Service
-# ---------------------------------------------------------------------------
+        Accepts the same top-level param keys as OpenAIClient so routes.py
+        can call either client identically:
+          - model          (str, required)
+          - input          (str) — user message text
+          - instructions   (str, optional) — system instruction text
+          - image_path     (str, optional) — local image file path
+          - temperature    (float, optional)
+          - max_tokens     (int, optional)
 
+        Returns:
+            Raw API response as dictionary (Gemini candidates envelope)
 
-class GeminiMealAnalysisService:
-    """Orchestrates meal analysis via GeminiProvider."""
-
-    def _get_provider(self) -> GeminiProvider:
-        """Instantiate a GeminiProvider with the API key from 1Password."""
+        Raises:
+            GeminiAuthenticationError: If API key is invalid (401)
+            GeminiRateLimitError: If rate limit is exceeded (429)
+            GeminiInvalidRequestError: If request parameters are invalid (400)
+            GeminiClientError: For other errors
+        """
         try:
-            op_reference = Config.get_provider_reference("gemini")
-            api_key = OnePasswordService.get_secret(op_reference)
-        except OnePasswordError as exc:
-            logger.error("Failed retrieving Gemini key from 1Password: %s", exc)
-            raise GeminiAuthenticationError(
-                "Failed to retrieve Gemini API key"
-            ) from exc
-        except ValueError as exc:
-            logger.error("Gemini provider reference misconfigured: %s", exc)
-            raise GeminiAuthenticationError(
-                "Gemini provider is not configured"
-            ) from exc
-
-        return GeminiProvider(api_key=api_key)
-
-    def analyse_meal_from_text(self, description: str) -> Dict[str, Any]:
-        if not description or not description.strip():
-            return {
-                "success": False,
-                "error": "Could not identify food items in the provided input.",
-            }
-
-        params = {
-            "model": GEMINI_MODEL,
-            "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [
-                        {
-                            "text": (
-                                "Analyse this meal description and return nutrition JSON: "
-                                f"{description.strip()}"
-                            )
-                        }
-                    ],
-                }
-            ],
-        }
-        return self._execute_with_retry(params)
-
-    def analyse_meal_from_image(
-        self, base64_image: str, mime_type: str
-    ) -> Dict[str, Any]:
-        if not base64_image or not base64_image.strip():
-            return {
-                "success": False,
-                "error": "Could not identify food items in the provided input.",
-            }
-
-        params = {
-            "model": GEMINI_MODEL,
-            "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [
-                        {
-                            "inline_data": {
-                                "mime_type": mime_type,
-                                "data": base64_image.strip(),
-                            }
-                        },
-                        {
-                            "text": (
-                                "Identify food items from this image and return nutrition JSON "
-                                "using the required schema."
-                            )
-                        },
-                    ],
-                }
-            ],
-        }
-        return self._execute_with_retry(params)
-
-    def _execute_with_retry(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        provider = self._get_provider()
-
-        for attempt in range(2):
-            if attempt == 1:
-                params = self._with_strict_retry_instruction(params)
-
-            try:
-                raw = provider.create_response(params)
-            except GeminiError as exc:
-                raise GeminiAPIError(str(exc)) from exc
-
-            try:
-                parsed = self._extract_and_validate(provider, raw)
-                return parsed
-            except GeminiResponseParseError as exc:
-                logger.warning(
-                    "Gemini response parse/validation failed (attempt %s/2): %s",
-                    attempt + 1,
-                    str(exc),
-                )
-                if attempt == 1:
-                    raise
-
-        raise GeminiResponseParseError("Failed to parse Gemini response after retry")
-
-    def _extract_and_validate(
-        self, provider: GeminiProvider, raw: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Use provider.parse_response() then strip fences and validate schema."""
-        parsed_response = provider.parse_response(raw)
-        text_body = parsed_response.get("content", "")
-
-        if not text_body:
-            raise GeminiResponseParseError("Gemini response contained empty text")
-
-        cleaned = self._strip_code_fences(text_body)
-        try:
-            data = json.loads(cleaned)
-        except json.JSONDecodeError as exc:
-            raise GeminiResponseParseError("Model output is not valid JSON") from exc
-
-        self._validate_result_shape(data)
-        return data
-
-    def _with_strict_retry_instruction(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        updated = json.loads(json.dumps(params))
-        parts = updated.setdefault("system_instruction", {}).setdefault("parts", [])
-        parts.append({"text": STRICT_JSON_PROMPT})
-        return updated
-
-    def _strip_code_fences(self, value: str) -> str:
-        content = value.strip()
-        if content.startswith("```"):
-            lines = content.splitlines()
-            if lines and lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].strip().startswith("```"):
-                lines = lines[:-1]
-            content = "\n".join(lines).strip()
-        return content
-
-    def _validate_result_shape(self, data: Dict[str, Any]) -> None:
-        if not isinstance(data, dict):
-            raise GeminiResponseParseError("Parsed output must be a JSON object")
-
-        if data.get("success") is False:
-            if not isinstance(data.get("error"), str) or not data["error"].strip():
-                raise GeminiResponseParseError(
-                    "Failure shape must include non-empty string error"
-                )
-            return
-
-        if data.get("success") is not True:
-            raise GeminiResponseParseError("Output must include success boolean")
-
-        missing = [field for field in SUCCESS_FIELDS if field not in data]
-        if missing:
-            raise GeminiResponseParseError(
-                f"Success shape missing required fields: {', '.join(sorted(missing))}"
+            logger.info(
+                "Making request to Gemini API with model: %s", params.get("model")
             )
+            response = self._provider.create_response(params)
+            logger.info("Successfully received response from Gemini")
+            return response
 
-        items = data.get("identified_items")
-        if not isinstance(items, list):
-            raise GeminiResponseParseError("identified_items must be a list")
+        except _ProviderAuthError as exc:
+            raise GeminiAuthenticationError(str(exc)) from exc
+        except _ProviderRateLimitError as exc:
+            raise GeminiRateLimitError(str(exc)) from exc
+        except _ProviderInvalidRequestError as exc:
+            raise GeminiInvalidRequestError(str(exc)) from exc
+        except GeminiError as exc:
+            raise GeminiClientError(str(exc)) from exc
 
-        totals = data.get("totals")
-        if not isinstance(totals, dict):
-            raise GeminiResponseParseError("totals must be an object")
+    def validate_parameters(self, params: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+        """
+        Validate parameters before API call.
 
-        for item in items:
-            if not isinstance(item, dict):
-                raise GeminiResponseParseError("each identified item must be an object")
-            self._validate_macro_fields(item, context="identified item")
+        Args:
+            params: Request parameters to validate
 
-        self._validate_macro_fields(totals, context="totals")
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not params.get("model"):
+            return False, "Model is required"
 
-    def _validate_macro_fields(self, payload: Dict[str, Any], context: str) -> None:
-        for key in MACRO_FIELDS:
-            if key not in payload:
-                raise GeminiResponseParseError(f"{context} missing {key}")
-            if not isinstance(payload[key], (int, float)):
-                raise GeminiResponseParseError(f"{context} field {key} must be numeric")
+        if not params.get("input") and not params.get("image_path"):
+            return False, "Input is required"
+
+        if "temperature" in params and params["temperature"] is not None:
+            temp = params["temperature"]
+            if not isinstance(temp, (int, float)) or not (0 <= temp <= 2):
+                return False, "Temperature must be a number between 0 and 2"
+
+        if "max_tokens" in params and params["max_tokens"] is not None:
+            max_tokens = params["max_tokens"]
+            if not isinstance(max_tokens, int) or max_tokens < 1:
+                return False, "max_tokens must be a positive integer"
+
+        return True, None
+
+    def __del__(self):
+        if hasattr(self, "_provider"):
+            del self._provider
