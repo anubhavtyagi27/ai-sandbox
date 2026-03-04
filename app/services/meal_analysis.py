@@ -1,12 +1,12 @@
 """
 Meal Analysis Service
 
-Orchestrates meal analysis using GeminiClient for HTTP calls.
+Orchestrates meal analysis using a configured AI provider.
 Handles meal-specific prompt construction, retry logic, and
-response schema validation on top of the client layer.
+response schema validation on top of the provider layer.
 
 Setup:
-1) Configure `OP_ITEM_REFERENCE_GEMINI` in `.env`
+1) Configure `OP_ITEM_REFERENCE_<PROVIDER>` and optionally `DEFAULT_PROVIDER` in `.env`
 2) Ensure 1Password CLI is installed and authenticated
 """
 
@@ -16,13 +16,19 @@ import json
 import logging
 from typing import Any, Dict, List
 
-from app.services.gemini_client import GeminiClient, GeminiClientError
+from app.providers import get_provider
+from app.providers.base import BaseProvider
+from app.providers.gemini import GeminiError
+from app.providers.openai import OpenAIError
 from app.services.onepassword import OnePasswordError, OnePasswordService
 from config import Config
 
 logger = logging.getLogger(__name__)
 
-GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = {
+    "gemini": "gemini-2.5-flash",
+    "openai": "gpt-4o",
+}
 
 SUCCESS_FIELDS = {
     "success",
@@ -80,23 +86,24 @@ class MealAnalysisParseError(MealAnalysisError):
 
 
 class MealAnalysisService:
-    """Orchestrates meal analysis via GeminiClient."""
+    """Orchestrates meal analysis via the configured AI provider."""
 
-    def _get_client(self) -> GeminiClient:
+    def _get_provider(self) -> BaseProvider:
+        provider_name = Config.DEFAULT_PROVIDER
         try:
-            op_reference = Config.get_provider_reference("gemini")
+            op_reference = Config.get_provider_reference(provider_name)
             api_key = OnePasswordService.get_secret(op_reference)
         except OnePasswordError as exc:
-            logger.error("Failed retrieving Gemini key from 1Password: %s", exc)
+            logger.error("Failed retrieving %s key from 1Password: %s", provider_name, exc)
             raise MealAnalysisAuthenticationError(
-                "Failed to retrieve Gemini API key"
+                f"Failed to retrieve {provider_name} API key"
             ) from exc
         except ValueError as exc:
-            logger.error("Gemini provider reference misconfigured: %s", exc)
+            logger.error("%s provider reference misconfigured: %s", provider_name, exc)
             raise MealAnalysisAuthenticationError(
-                "Gemini provider is not configured"
+                f"{provider_name} provider is not configured"
             ) from exc
-        return GeminiClient(api_key=api_key)
+        return get_provider(provider_name, api_key)
 
     def analyse_meal_from_text(self, description: str) -> Dict[str, Any]:
         if not description or not description.strip():
@@ -105,8 +112,9 @@ class MealAnalysisService:
                 "error": "Could not identify food items in the provided input.",
             }
 
+        provider_name = Config.DEFAULT_PROVIDER
         params = {
-            "model": GEMINI_MODEL,
+            "model": DEFAULT_MODEL.get(provider_name, "gemini-2.5-flash"),
             "instructions": SYSTEM_PROMPT,
             "input": (
                 "Analyse this meal description and return nutrition JSON: "
@@ -124,48 +132,33 @@ class MealAnalysisService:
                 "error": "Could not identify food items in the provided input.",
             }
 
-        # Pass pre-built Gemini contents for the image+text multipart payload
+        provider_name = Config.DEFAULT_PROVIDER
         params = {
-            "model": GEMINI_MODEL,
+            "model": DEFAULT_MODEL.get(provider_name, "gemini-2.5-flash"),
             "instructions": SYSTEM_PROMPT,
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [
-                        {
-                            "inline_data": {
-                                "mime_type": mime_type,
-                                "data": base64_image.strip(),
-                            }
-                        },
-                        {
-                            "text": (
-                                "Identify food items from this image and return nutrition JSON "
-                                "using the required schema."
-                            )
-                        },
-                    ],
-                }
-            ],
+            "base64_image": base64_image.strip(),
+            "mime_type": mime_type,
+            "input": (
+                "Identify food items from this image and return nutrition JSON "
+                "using the required schema."
+            ),
         }
         return self._execute_with_retry(params)
 
     def _execute_with_retry(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        from app.providers.gemini import GeminiProvider
-
-        client = self._get_client()
+        provider = self._get_provider()
 
         for attempt in range(2):
             if attempt == 1:
                 params = self._with_strict_retry_instruction(params)
 
             try:
-                raw = client.create_response(params)
-            except GeminiClientError as exc:
+                raw = provider.create_response(params)
+            except (GeminiError, OpenAIError) as exc:
                 raise MealAnalysisAPIError(str(exc)) from exc
 
             try:
-                parsed = self._extract_and_validate(client._provider, raw)
+                parsed = self._extract_and_validate(provider, raw)
                 return parsed
             except MealAnalysisParseError as exc:
                 logger.warning(
@@ -176,14 +169,14 @@ class MealAnalysisService:
                 if attempt == 1:
                     raise
 
-        raise MealAnalysisParseError("Failed to parse Gemini response after retry")
+        raise MealAnalysisParseError("Failed to parse response after retry")
 
-    def _extract_and_validate(self, provider, raw: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_and_validate(self, provider: BaseProvider, raw: Dict[str, Any]) -> Dict[str, Any]:
         parsed_response = provider.parse_response(raw)
         text_body = parsed_response.get("content", "")
 
         if not text_body:
-            raise MealAnalysisParseError("Gemini response contained empty text")
+            raise MealAnalysisParseError("Provider response contained empty text")
 
         cleaned = self._strip_code_fences(text_body)
         try:
