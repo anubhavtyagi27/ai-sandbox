@@ -132,11 +132,22 @@ class GeminiProvider(BaseProvider):
         Returns:
             Gemini-format contents list
         """
-        # Pass-through if caller already built the contents array (e.g. gemini_client meal analysis)
+        # Pass-through if caller already built the contents array
         if params.get("contents"):
             return params["contents"]
 
         user_parts: List[Dict[str, Any]] = []
+
+        # In-memory base64 image (e.g. from meal analysis API upload)
+        if params.get("base64_image"):
+            user_parts.append(
+                {
+                    "inline_data": {
+                        "mime_type": params.get("mime_type", "image/jpeg"),
+                        "data": params["base64_image"],
+                    }
+                }
+            )
 
         image_path = params.get("image_path")
         if image_path:
@@ -318,6 +329,7 @@ class GeminiProvider(BaseProvider):
             not params.get("contents")
             and not params.get("input")
             and not params.get("image_path")
+            and not params.get("base64_image")
         ):
             return False, "input is required"
 

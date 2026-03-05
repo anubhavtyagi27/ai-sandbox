@@ -9,19 +9,18 @@ from app.services.meal_analysis import (
 )
 
 
-def _make_client(return_value=None, side_effect=None):
-    """Return a mock GeminiClient."""
-    client = MagicMock()
+def _make_provider(return_value=None, side_effect=None):
+    """Return a mock BaseProvider with parse_response wired to GeminiProvider."""
+    provider = MagicMock()
     if side_effect:
-        client.create_response.side_effect = side_effect
+        provider.create_response.side_effect = side_effect
     else:
-        client.create_response.return_value = return_value or {}
-    # Wire _provider.parse_response to the real GeminiProvider implementation
+        provider.create_response.return_value = return_value or {}
     from app.providers.gemini import GeminiProvider
 
     real = GeminiProvider.__new__(GeminiProvider)
-    client._provider.parse_response.side_effect = real.parse_response
-    return client
+    provider.parse_response.side_effect = real.parse_response
+    return provider
 
 
 def _gemini_response(text):
@@ -61,9 +60,9 @@ class TestMealAnalysisService(unittest.TestCase):
 
     def test_analyse_meal_from_text_success(self):
         raw = _gemini_response(json.dumps(_success_payload()))
-        client = _make_client(return_value=raw)
+        provider = _make_provider(return_value=raw)
 
-        with patch.object(self.service, "_get_client", return_value=client):
+        with patch.object(self.service, "_get_provider", return_value=provider):
             result = self.service.analyse_meal_from_text("2 rotis with dal makhani")
 
         self.assertTrue(result["success"])
@@ -71,41 +70,52 @@ class TestMealAnalysisService(unittest.TestCase):
 
     def test_analyse_meal_from_image_success(self):
         raw = _gemini_response(json.dumps(_success_payload()))
-        client = _make_client(return_value=raw)
+        provider = _make_provider(return_value=raw)
 
-        with patch.object(self.service, "_get_client", return_value=client):
+        with patch.object(self.service, "_get_provider", return_value=provider):
             result = self.service.analyse_meal_from_image("abc123", "image/jpeg")
 
         self.assertTrue(result["success"])
         self.assertIn("identified_items", result)
 
+    def test_analyse_meal_from_image_passes_base64_params(self):
+        raw = _gemini_response(json.dumps(_success_payload()))
+        provider = _make_provider(return_value=raw)
+
+        with patch.object(self.service, "_get_provider", return_value=provider):
+            self.service.analyse_meal_from_image("abc123", "image/png")
+
+        call_params = provider.create_response.call_args[0][0]
+        self.assertEqual(call_params["base64_image"], "abc123")
+        self.assertEqual(call_params["mime_type"], "image/png")
+
     def test_retry_on_invalid_json_then_success(self):
         first = _gemini_response("not-json")
         second = _gemini_response(json.dumps(_success_payload()))
-        client = _make_client(side_effect=[first, second])
+        provider = _make_provider(side_effect=[first, second])
 
-        with patch.object(self.service, "_get_client", return_value=client):
+        with patch.object(self.service, "_get_provider", return_value=provider):
             result = self.service.analyse_meal_from_text(
                 "aaj lunch mein dal chawal khaya"
             )
 
         self.assertTrue(result["success"])
-        self.assertEqual(client.create_response.call_count, 2)
+        self.assertEqual(provider.create_response.call_count, 2)
 
     def test_fail_when_retry_also_invalid(self):
         invalid = _gemini_response("not-json")
-        client = _make_client(side_effect=[invalid, invalid])
+        provider = _make_provider(side_effect=[invalid, invalid])
 
-        with patch.object(self.service, "_get_client", return_value=client):
+        with patch.object(self.service, "_get_provider", return_value=provider):
             with self.assertRaises(MealAnalysisParseError):
                 self.service.analyse_meal_from_text("anything")
 
     def test_api_error_raises_meal_analysis_api_error(self):
-        from app.services.gemini_client import GeminiClientError
+        from app.providers.gemini import GeminiError
 
-        client = _make_client(side_effect=GeminiClientError("rate limit"))
+        provider = _make_provider(side_effect=GeminiError("rate limit"))
 
-        with patch.object(self.service, "_get_client", return_value=client):
+        with patch.object(self.service, "_get_provider", return_value=provider):
             with self.assertRaises(MealAnalysisAPIError):
                 self.service.analyse_meal_from_text("anything")
 
@@ -115,9 +125,9 @@ class TestMealAnalysisService(unittest.TestCase):
             "error": "Could not identify food items in the provided input.",
         }
         raw = _gemini_response(json.dumps(failure))
-        client = _make_client(return_value=raw)
+        provider = _make_provider(return_value=raw)
 
-        with patch.object(self.service, "_get_client", return_value=client):
+        with patch.object(self.service, "_get_provider", return_value=provider):
             result = self.service.analyse_meal_from_text("random words not food")
 
         self.assertFalse(result["success"])
@@ -125,12 +135,12 @@ class TestMealAnalysisService(unittest.TestCase):
 
     def test_instructions_passed_as_system_prompt(self):
         raw = _gemini_response(json.dumps(_success_payload()))
-        client = _make_client(return_value=raw)
+        provider = _make_provider(return_value=raw)
 
-        with patch.object(self.service, "_get_client", return_value=client):
+        with patch.object(self.service, "_get_provider", return_value=provider):
             self.service.analyse_meal_from_text("dal rice")
 
-        call_params = client.create_response.call_args[0][0]
+        call_params = provider.create_response.call_args[0][0]
         self.assertIn("instructions", call_params)
         self.assertIn("nutrition expert", call_params["instructions"])
 

@@ -200,19 +200,22 @@ class OpenAIProvider(BaseProvider):
             image_path = params.get("image_path")
             user_content = []
 
-            if image_path:
+            if params.get("base64_image") or image_path:
                 # Image mode / Multimodal
-                mime_type, _ = mimetypes.guess_type(image_path)
-                if not mime_type:
-                    mime_type = "image/jpeg"
-
-                base64_image = self._encode_image(image_path)
+                if params.get("base64_image"):
+                    b64 = params["base64_image"]
+                    mime = params.get("mime_type", "image/jpeg")
+                else:
+                    mime, _ = mimetypes.guess_type(image_path)
+                    if not mime:
+                        mime = "image/jpeg"
+                    b64 = self._encode_image(image_path)
 
                 # Add image part
                 user_content.append(
                     {
                         "type": "input_image",
-                        "image_url": f"data:{mime_type};base64,{base64_image}",
+                        "image_url": f"data:{mime};base64,{b64}",
                     }
                 )
 
