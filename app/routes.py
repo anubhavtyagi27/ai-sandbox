@@ -4,10 +4,10 @@ import os
 import time
 from datetime import datetime, timezone
 
-from flask import Blueprint, current_app, flash, render_template, request, session
+from flask import Blueprint, current_app, flash, jsonify, render_template, request, session
 
 from app.forms import ProviderSelectionForm, ResponsesAPIForm
-from app.providers import get_provider, list_providers
+from app.providers import get_provider, get_provider_class, list_providers
 from app.schemas import detect_schema
 from app.services.onepassword import OnePasswordError, OnePasswordService
 from config import Config
@@ -79,6 +79,16 @@ def _extract_output_parameters(response_data):
         output_parameters["Output Items"] = len(output)
 
     return output_parameters
+
+
+@bp.route("/api/providers/<name>/models")
+def provider_models(name):
+    """Return model list for a given provider as JSON."""
+    provider_class = get_provider_class(name)
+    if not provider_class:
+        return jsonify({"error": f"Unknown provider: {name}"}), 404
+    temp = provider_class(api_key="dummy")
+    return jsonify([{"value": v, "label": l} for v, l in temp.models])
 
 
 @bp.route("/", methods=["GET", "POST"])
