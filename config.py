@@ -5,12 +5,18 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 
 class Config:
     """Base configuration with environment variable loading and validation"""
 
     # Required configuration
     SECRET_KEY = os.environ.get("SECRET_KEY") or "dev-secret-key-change-in-production"
+
+    # File uploads
+    UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER") or os.path.join(BASE_DIR, "uploads")
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16 MB upload limit
 
     # Multi-provider API key references (1Password)
     OP_ITEM_REFERENCE_OPENAI = os.environ.get("OP_ITEM_REFERENCE_OPENAI")

@@ -4,7 +4,8 @@ import os
 import time
 from datetime import datetime, timezone
 
-from flask import Blueprint, current_app, flash, jsonify, render_template, request, session
+from flask import Blueprint, current_app, flash, jsonify, render_template, request, send_file, session
+from werkzeug.utils import secure_filename
 
 from app.forms import ProviderSelectionForm, ResponsesAPIForm
 from app.providers import get_provider, get_provider_class, list_providers
@@ -15,6 +16,23 @@ from config import Config
 # Create blueprint for routes
 bp = Blueprint("main", __name__)
 logger = logging.getLogger(__name__)
+
+ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
+
+
+def _get_upload_folder():
+    folder = current_app.config.get("UPLOAD_FOLDER")
+    os.makedirs(folder, exist_ok=True)
+    return folder
+
+
+def _find_active_image(upload_folder):
+    """Return path to the active image file, or None if none exists."""
+    for ext in ALLOWED_IMAGE_EXTENSIONS:
+        path = os.path.join(upload_folder, f"active_image.{ext}")
+        if os.path.exists(path):
+            return path
+    return None
 
 
 def _format_created_at(created_value):
@@ -91,6 +109,28 @@ def provider_models(name):
     return jsonify([{"value": v, "label": l} for v, l in temp.models])
 
 
+@bp.route("/api/uploads/instructions")
+def preview_instructions():
+    """Return the content of the active system instructions file."""
+    folder = current_app.config.get("UPLOAD_FOLDER", "")
+    path = os.path.join(folder, "active_instructions.md")
+    if not os.path.exists(path):
+        return jsonify({"exists": False, "content": None})
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+    return jsonify({"exists": True, "content": content})
+
+
+@bp.route("/api/uploads/image")
+def serve_active_image():
+    """Serve the active image file."""
+    folder = current_app.config.get("UPLOAD_FOLDER", "")
+    img_path = _find_active_image(folder)
+    if not img_path:
+        return jsonify({"error": "No active image"}), 404
+    return send_file(img_path)
+
+
 @bp.route("/", methods=["GET", "POST"])
 def index():
     """
@@ -123,51 +163,28 @@ def index():
     # Get available providers for display
     available_providers = list_providers()
 
-    # Pre-populate system instruction file path from session
-    if request.method == "GET" and "system_instruction_file" in session:
-        form.system_instruction_file.data = session["system_instruction_file"]
-
     if form.validate_on_submit():
         try:
-            # Step 1: Handle system instruction file path
+            # Step 1: Handle system instruction file upload
             system_instruction = None
-            if (
-                form.system_instruction_file.data
-                and form.system_instruction_file.data.strip()
-            ):
-                file_path = form.system_instruction_file.data.strip()
+            upload_folder = _get_upload_folder()
+            instr_path = os.path.join(upload_folder, "active_instructions.md")
 
-                # Save the file path to session for persistence
-                session["system_instruction_file"] = file_path
+            uploaded_instr = form.system_instruction_upload.data
+            if uploaded_instr and uploaded_instr.filename:
+                uploaded_instr.save(instr_path)
+                logger.info(f"Saved system instruction to: {instr_path}")
 
-                # Read the markdown file
-                if os.path.exists(file_path):
-                    try:
-                        with open(file_path, "r", encoding="utf-8") as f:
-                            system_instruction = f.read()
-                        logger.info(f"Loaded system instruction from: {file_path}")
-                    except Exception as e:
-                        flash(f"Error reading file {file_path}: {str(e)}", "warning")
-                        logger.error(f"Error reading system instruction file: {e}")
-                else:
-                    flash(f"File not found: {file_path}", "warning")
-                    logger.warning(f"System instruction file not found: {file_path}")
-            elif "system_instruction_file" in session:
-                # Use previously saved file path
-                file_path = session["system_instruction_file"]
-                if os.path.exists(file_path):
-                    try:
-                        with open(file_path, "r", encoding="utf-8") as f:
-                            system_instruction = f.read()
-                        logger.info(
-                            f"Loaded system instruction from saved path: {file_path}"
-                        )
-                        # Pre-populate the form field with saved path
-                        form.system_instruction_file.data = file_path
-                    except Exception as e:
-                        logger.error(
-                            f"Error reading saved system instruction file: {e}"
-                        )
+            if os.path.exists(instr_path):
+                try:
+                    with open(instr_path, "r", encoding="utf-8") as f:
+                        system_instruction = f.read()
+                    logger.info(
+                        f"Loaded system instruction ({len(system_instruction)} chars)"
+                    )
+                except Exception as e:
+                    flash(f"Error reading system instructions: {str(e)}", "warning")
+                    logger.error(f"Error reading system instruction file: {e}")
 
             # Step 2: Retrieve API key from 1Password
             # Use the selected provider
@@ -190,15 +207,30 @@ def index():
                 if not form.input.data or not form.input.data.strip():
                     raise ValueError("Input text is required in text mode")
             elif form.input_mode.data == "image":
-                if not form.image_path.data or not form.image_path.data.strip():
-                    raise ValueError("Image path is required in image mode")
+                active_img_path = None
 
-                image_path = form.image_path.data.strip()
-                if not os.path.exists(image_path):
-                    raise ValueError(f"Image file not found at: {image_path}")
+                uploaded_img = form.image_upload.data
+                if uploaded_img and uploaded_img.filename:
+                    filename = secure_filename(uploaded_img.filename)
+                    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "jpg"
+                    # Remove any previously stored active image
+                    for old_ext in ALLOWED_IMAGE_EXTENSIONS:
+                        old_path = os.path.join(upload_folder, f"active_image.{old_ext}")
+                        if os.path.exists(old_path):
+                            os.remove(old_path)
+                    active_img_path = os.path.join(upload_folder, f"active_image.{ext}")
+                    uploaded_img.save(active_img_path)
+                    logger.info(f"Saved uploaded image to: {active_img_path}")
+                else:
+                    active_img_path = _find_active_image(upload_folder)
 
-                params["image_path"] = image_path
-                logger.info(f"Processing image input: {image_path}")
+                if not active_img_path:
+                    raise ValueError(
+                        "An image is required in Image Mode. Please upload an image."
+                    )
+
+                params["image_path"] = active_img_path
+                logger.info(f"Processing image input: {active_img_path}")
 
             # Add system instruction if available (top-level parameter)
             if system_instruction:
@@ -329,6 +361,17 @@ def index():
             logger.exception(f"{error_type} from {provider_name}: {e}")
             flash(error_message, "danger")
 
+    # Compute active upload file info for the template
+    _upload_folder = current_app.config.get("UPLOAD_FOLDER", "")
+    active_instructions_file = None
+    active_image_file = None
+    if _upload_folder and os.path.isdir(_upload_folder):
+        if os.path.exists(os.path.join(_upload_folder, "active_instructions.md")):
+            active_instructions_file = "active_instructions.md"
+        active_img = _find_active_image(_upload_folder)
+        if active_img:
+            active_image_file = os.path.basename(active_img)
+
     return render_template(
         "index.html",
         form=form,
@@ -337,4 +380,6 @@ def index():
         available_providers=available_providers,
         response_data=response_data,
         error=error_message,
+        active_instructions_file=active_instructions_file,
+        active_image_file=active_image_file,
     )

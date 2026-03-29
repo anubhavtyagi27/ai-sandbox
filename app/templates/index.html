@@ -10,7 +10,7 @@
         <!-- Combined Form -->
         <div class="card mb-4">
             <div class="card-body">
-                <form method="POST" action="/" id="apiForm">
+                <form method="POST" action="/" id="apiForm" enctype="multipart/form-data">
                     {{ form.hidden_tag() }}
 
                     <!-- Hidden provider field to maintain selection on POST -->
@@ -37,21 +37,40 @@
                         </div>
                     </div>
 
-                    <!-- System Instruction File Path -->
+                    <!-- System Instructions Upload -->
                     <div class="mb-3">
-                        <label for="system_instruction_file" class="form-label">
-                            {{ form.system_instruction_file.label }}
-                        </label>
-                        {{ form.system_instruction_file }} {% if
-                        form.system_instruction_file.errors %}
+                        <label class="form-label">{{ form.system_instruction_upload.label }}</label>
+                        {% if active_instructions_file %}
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-success">Active</span>
+                            <code class="small">{{ active_instructions_file }}</code>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0"
+                                    data-bs-toggle="modal" data-bs-target="#instructionsPreviewModal">
+                                Preview
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-warning py-0"
+                                    onclick="showReplaceField('replaceInstructionsInput')">
+                                Replace
+                            </button>
+                        </div>
+                        <div id="replaceInstructionsInput" class="{{ 'd-none' if not form.system_instruction_upload.errors else '' }}">
+                            {{ form.system_instruction_upload }}
+                            {% if form.system_instruction_upload.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.system_instruction_upload.errors[0] }}
+                            </div>
+                            {% endif %}
+                            <div class="form-text">Upload a new file to replace the active instructions.</div>
+                        </div>
+                        {% else %}
+                        {{ form.system_instruction_upload }}
+                        {% if form.system_instruction_upload.errors %}
                         <div class="invalid-feedback d-block">
-                            {{ form.system_instruction_file.errors[0] }}
+                            {{ form.system_instruction_upload.errors[0] }}
                         </div>
                         {% endif %}
-                        <div class="form-text">
-                            Path to markdown file with system instructions. Once
-                            set, it will be remembered for future requests.
-                        </div>
+                        <div class="form-text">Upload a .md or .txt file with system instructions.</div>
+                        {% endif %}
                     </div>
 
                     <!-- Input Mode Selection -->
@@ -75,20 +94,42 @@
                         {% endfor %}
                     </div>
 
-                    <!-- Image Path (Hidden by default) -->
-                    <div class="mb-3 d-none" id="imagePathGroup">
-                        <label for="image_path" class="form-label">
-                            {{ form.image_path.label }}
+                    <!-- Image Upload (Hidden by default, shown in image mode) -->
+                    <div class="mb-3 d-none" id="imageFileGroup">
+                        <label class="form-label">
+                            {{ form.image_upload.label }}
                             <span class="text-danger">*</span>
                         </label>
-                        {{ form.image_path }} {% if form.image_path.errors %}
+                        {% if active_image_file %}
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <span class="badge bg-success">Active</span>
+                            <code class="small">{{ active_image_file }}</code>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0"
+                                    data-bs-toggle="modal" data-bs-target="#imagePreviewModal">
+                                Preview
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-warning py-0"
+                                    onclick="showReplaceField('replaceImageInput')">
+                                Replace
+                            </button>
+                        </div>
+                        <div id="replaceImageInput" class="{{ 'd-none' if not form.image_upload.errors else '' }}">
+                            {{ form.image_upload }}
+                            {% if form.image_upload.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.image_upload.errors[0] }}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        {{ form.image_upload }}
+                        {% endif %}
+                        {% if form.image_upload.errors %}
                         <div class="invalid-feedback d-block">
-                            {{ form.image_path.errors[0] }}
+                            {{ form.image_upload.errors[0] }}
                         </div>
                         {% endif %}
-                        <div class="form-text">
-                            Enter the absolute path to a local image file.
-                        </div>
+                        <div class="form-text">Upload an image (JPG, PNG, GIF, WebP). Required in Image Mode.</div>
                     </div>
 
                     <!-- Input Text -->
@@ -431,7 +472,41 @@
                 </div>
             </div>
         </div>
-        {% endif %} {% if error %}
+        {% endif %}
+
+        <!-- System Instructions Preview Modal -->
+        <div class="modal fade" id="instructionsPreviewModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">System Instructions Preview</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <pre id="instructionsPreviewContent"
+                             class="p-3 bg-light rounded"
+                             style="white-space: pre-wrap; max-height: 60vh; overflow-y: auto; font-size: 0.85rem;">Loading...</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Image Preview Modal -->
+        <div class="modal fade" id="imagePreviewModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Image Preview</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body text-center p-3">
+                        <img src="/api/uploads/image" class="img-fluid rounded" alt="Active image">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if error %}
         <div class="card">
             <div class="card-header bg-danger text-white">
                 <h5 class="mb-0">Error</h5>
@@ -462,7 +537,7 @@
             'input[name="input_mode"]:checked',
         ).value;
         const textGroup = document.getElementById("inputTextGroup");
-        const imageGroup = document.getElementById("imagePathGroup");
+        const imageGroup = document.getElementById("imageFileGroup");
 
         if (mode === "image") {
             textGroup.classList.add("d-none");
@@ -471,6 +546,12 @@
             textGroup.classList.remove("d-none");
             imageGroup.classList.add("d-none");
         }
+    }
+
+    // Show a hidden replace-file input
+    function showReplaceField(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove("d-none");
     }
 
     // Update model dropdown when provider selection changes
@@ -503,6 +584,23 @@
         if (providerSelect) {
             providerSelect.addEventListener("change", function () {
                 updateModels(this.value);
+            });
+        }
+
+        // Fetch and display system instructions in preview modal
+        const instrModal = document.getElementById("instructionsPreviewModal");
+        if (instrModal) {
+            instrModal.addEventListener("show.bs.modal", function () {
+                const pre = document.getElementById("instructionsPreviewContent");
+                pre.textContent = "Loading...";
+                fetch("/api/uploads/instructions")
+                    .then((r) => r.json())
+                    .then((data) => {
+                        pre.textContent = data.content || "(empty file)";
+                    })
+                    .catch(() => {
+                        pre.textContent = "Failed to load preview.";
+                    });
             });
         }
     });
