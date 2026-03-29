@@ -1,6 +1,7 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, IntegerField, DecimalField, BooleanField, SelectField, RadioField
-from wtforms.validators import DataRequired, Optional, NumberRange, Length, ValidationError
+from flask_wtf.file import FileField, FileAllowed
+from wtforms import TextAreaField, IntegerField, DecimalField, BooleanField, SelectField, RadioField
+from wtforms.validators import DataRequired, Optional, NumberRange, ValidationError
 from app.providers import list_providers, get_provider_class
 import json
 
@@ -45,13 +46,10 @@ class ResponsesAPIForm(FlaskForm):
         render_kw={"class": "form-select"}
     )
 
-    system_instruction_file = StringField(
-        'System Instruction File Path',
-        validators=[Optional()],
-        render_kw={
-            "placeholder": "/path/to/system-instructions.md",
-            "class": "form-control"
-        }
+    system_instruction_file = FileField(
+        'System Instructions',
+        validators=[Optional(), FileAllowed(['md', 'txt'], 'Markdown or text files only')],
+        render_kw={"class": "form-control", "accept": ".md,.txt"}
     )
 
     input_mode = RadioField(
@@ -61,13 +59,10 @@ class ResponsesAPIForm(FlaskForm):
         render_kw={"class": "btn-group-toggle"}
     )
 
-    image_path = StringField(
-        'Image Path',
-        validators=[Optional()],
-        render_kw={
-            "placeholder": "/absolute/path/to/image.jpg",
-            "class": "form-control"
-        }
+    image_file = FileField(
+        'Image',
+        validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Images only')],
+        render_kw={"class": "form-control", "accept": "image/*"}
     )
 
     input = TextAreaField(
