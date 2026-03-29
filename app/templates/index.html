@@ -39,7 +39,7 @@
 
                     <!-- System Instructions Upload -->
                     <div class="mb-3">
-                        <label class="form-label">{{ form.system_instruction_file.label }}</label>
+                        <label class="form-label">{{ form.system_instruction_upload.label }}</label>
                         {% if active_instructions_file %}
                         <div class="d-flex align-items-center gap-2 mb-2">
                             <span class="badge bg-success">Active</span>
@@ -53,20 +53,20 @@
                                 Replace
                             </button>
                         </div>
-                        <div class="d-none" id="replaceInstructionsInput">
-                            {{ form.system_instruction_file }}
-                            {% if form.system_instruction_file.errors %}
+                        <div id="replaceInstructionsInput" class="{{ 'd-none' if not form.system_instruction_upload.errors else '' }}">
+                            {{ form.system_instruction_upload }}
+                            {% if form.system_instruction_upload.errors %}
                             <div class="invalid-feedback d-block">
-                                {{ form.system_instruction_file.errors[0] }}
+                                {{ form.system_instruction_upload.errors[0] }}
                             </div>
                             {% endif %}
                             <div class="form-text">Upload a new file to replace the active instructions.</div>
                         </div>
                         {% else %}
-                        {{ form.system_instruction_file }}
-                        {% if form.system_instruction_file.errors %}
+                        {{ form.system_instruction_upload }}
+                        {% if form.system_instruction_upload.errors %}
                         <div class="invalid-feedback d-block">
-                            {{ form.system_instruction_file.errors[0] }}
+                            {{ form.system_instruction_upload.errors[0] }}
                         </div>
                         {% endif %}
                         <div class="form-text">Upload a .md or .txt file with system instructions.</div>
@@ -97,7 +97,7 @@
                     <!-- Image Upload (Hidden by default, shown in image mode) -->
                     <div class="mb-3 d-none" id="imageFileGroup">
                         <label class="form-label">
-                            {{ form.image_file.label }}
+                            {{ form.image_upload.label }}
                             <span class="text-danger">*</span>
                         </label>
                         {% if active_image_file %}
@@ -113,15 +113,20 @@
                                 Replace
                             </button>
                         </div>
-                        <div class="d-none" id="replaceImageInput">
-                            {{ form.image_file }}
+                        <div id="replaceImageInput" class="{{ 'd-none' if not form.image_upload.errors else '' }}">
+                            {{ form.image_upload }}
+                            {% if form.image_upload.errors %}
+                            <div class="invalid-feedback d-block">
+                                {{ form.image_upload.errors[0] }}
+                            </div>
+                            {% endif %}
                         </div>
                         {% else %}
-                        {{ form.image_file }}
+                        {{ form.image_upload }}
                         {% endif %}
-                        {% if form.image_file.errors %}
+                        {% if form.image_upload.errors %}
                         <div class="invalid-feedback d-block">
-                            {{ form.image_file.errors[0] }}
+                            {{ form.image_upload.errors[0] }}
                         </div>
                         {% endif %}
                         <div class="form-text">Upload an image (JPG, PNG, GIF, WebP). Required in Image Mode.</div>

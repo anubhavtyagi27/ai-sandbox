@@ -37,7 +37,7 @@ def client(app):
 def test_instruction_upload_and_persistence(client, app):
     # 1. Upload a file
     data = {
-        'system_instruction_file': (io.BytesIO(b'Test instructions'), 'test.md'),
+        'system_instruction_upload': (io.BytesIO(b'Test instructions'), 'test.md'),
         'input_mode': 'text',
         'input': 'test prompt',
         'model': 'gpt-4o',
@@ -61,7 +61,7 @@ def test_instruction_upload_and_persistence(client, app):
 def test_image_upload_and_persistence(client, app):
     # 1. Upload an image
     data = {
-        'image_file': (io.BytesIO(b'fake image data'), 'test.png'),
+        'image_upload': (io.BytesIO(b'fake image data'), 'test.png'),
         'input_mode': 'image',
         'input': 'what is this',
         'model': 'gpt-4o',

@@ -46,7 +46,7 @@ class ResponsesAPIForm(FlaskForm):
         render_kw={"class": "form-select"}
     )
 
-    system_instruction_file = FileField(
+    system_instruction_upload = FileField(
         'System Instructions',
         validators=[Optional(), FileAllowed(['md', 'txt'], 'Markdown or text files only')],
         render_kw={"class": "form-control", "accept": ".md,.txt"}
@@ -59,7 +59,7 @@ class ResponsesAPIForm(FlaskForm):
         render_kw={"class": "btn-group-toggle"}
     )
 
-    image_file = FileField(
+    image_upload = FileField(
         'Image',
         validators=[Optional(), FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'webp'], 'Images only')],
         render_kw={"class": "form-control", "accept": "image/*"}

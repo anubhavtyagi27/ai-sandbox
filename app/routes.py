@@ -170,7 +170,7 @@ def index():
             upload_folder = _get_upload_folder()
             instr_path = os.path.join(upload_folder, "active_instructions.md")
 
-            uploaded_instr = form.system_instruction_file.data
+            uploaded_instr = form.system_instruction_upload.data
             if uploaded_instr and uploaded_instr.filename:
                 uploaded_instr.save(instr_path)
                 logger.info(f"Saved system instruction to: {instr_path}")
@@ -209,7 +209,7 @@ def index():
             elif form.input_mode.data == "image":
                 active_img_path = None
 
-                uploaded_img = form.image_file.data
+                uploaded_img = form.image_upload.data
                 if uploaded_img and uploaded_img.filename:
                     filename = secure_filename(uploaded_img.filename)
                     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "jpg"
